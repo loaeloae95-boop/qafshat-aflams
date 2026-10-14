@@ -3,7 +3,7 @@ import { Music, Play, Share2, Trash2 } from "lucide-react";
 import { shareClip, type Clip } from "@/lib/clips";
 import { usePlayer } from "./player";
 
-export function ClipCard({ clip, list, index, onDelete }: { clip: Clip; list: Clip[]; index: number; onDelete?: () => void }) {
+export function ClipCard({ clip, list, index, onDelete }: { clip: Clip; list: Clip[]; index: number; onDelete?: (() => void) | undefined }) {
   const { playMini, openReels, mini } = usePlayer();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isActive = mini?.id === clip.id;
