@@ -60,7 +60,7 @@ function Studio() {
     return path;
   };
 
-  const submit = async (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent): Promise<unknown> => {
     e.preventDefault();
     if (!user || !file) return toast.error("اختر ملف القفشة");
     if (!title.trim()) return toast.error("اسم القفشة مطلوب");

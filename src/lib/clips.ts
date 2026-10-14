@@ -65,7 +65,7 @@ export function useClips() {
         plays: r.plays_count,
         likes: r.likes_count,
         userId: r.user_id,
-        gradient: GRADIENTS[i % GRADIENTS.length],
+        gradient: GRADIENTS[i % GRADIENTS.length] ?? "gradient-violet",
         createdAt: r.created_at,
       }));
     },
