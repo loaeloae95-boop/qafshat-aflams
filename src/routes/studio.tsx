@@ -60,11 +60,11 @@ function Studio() {
     return path;
   };
 
-  const submit = async (e: React.FormEvent): Promise<unknown> => {
+  const submit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
-    if (!user || !file) return toast.error("اختر ملف القفشة");
-    if (!title.trim()) return toast.error("اسم القفشة مطلوب");
-    if (gifMode === "link" && gifLink && !/^https?:\/\//.test(gifLink)) return toast.error("رابط الصورة المتحركة غير صالح");
+    if (!user || !file) { toast.error("اختر ملف القفشة"); return; }
+    if (!title.trim()) { toast.error("اسم القفشة مطلوب"); return; }
+    if (gifMode === "link" && gifLink && !/^https?:\/\//.test(gifLink)) { toast.error("رابط الصورة المتحركة غير صالح"); return; }
     setBusy(true);
     try {
       const [mediaPath, duration] = await Promise.all([upload(file, type), mediaDuration(file)]);
