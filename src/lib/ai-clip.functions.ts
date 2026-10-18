@@ -144,10 +144,12 @@ export const searchGifs = createServerFn({ method: "POST" })
     if (!key) return { gifs: [], missingKey: true };
     const seen = new Set<string>();
     const gifs: GifResult[] = [];
+    const qs = data.keywords.slice(0, 3);
+    const per = String(Math.ceil(6 / qs.length) + 1);
     const results = await Promise.all(
-      data.keywords.slice(0, 3).map(async (q) => {
+      qs.map(async (q) => {
         const u = new URL("https://api.giphy.com/v1/gifs/search");
-        u.search = new URLSearchParams({ api_key: key, q, limit: "4", rating: "pg-13" }).toString();
+        u.search = new URLSearchParams({ api_key: key, q, limit: per, rating: "pg-13" }).toString();
         const r = await fetch(u);
         if (!r.ok) return [];
         const j = (await r.json()) as { data?: { id: string; images: Record<string, { url?: string }> }[] };
