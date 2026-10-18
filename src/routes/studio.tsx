@@ -3,7 +3,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Check, Loader2, Music, Sparkles, Video } from "lucide-react";
+import { Check, Loader2, Music, Search, Sparkles, Video } from "lucide-react";
+import { GifPicker } from "@/components/GifPicker";
 import { AppShell } from "@/components/AppShell";
 import { SignInPrompt } from "@/components/SignInPrompt";
 import { MediaTrimmer } from "@/components/MediaTrimmer";
@@ -53,6 +54,7 @@ function Studio() {
   const [sugg, setSugg] = useState<ClipSuggestion | null>(null);
   const [gifs, setGifs] = useState<GifResult[]>([]);
   const [gifNote, setGifNote] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const gifFileUrl = useMemo(() => (gifFile ? URL.createObjectURL(gifFile) : null), [gifFile]);
   useEffect(() => () => { if (gifFileUrl) URL.revokeObjectURL(gifFileUrl); }, [gifFileUrl]);
@@ -240,12 +242,28 @@ function Studio() {
                   {m === "file" ? "رفع ملف" : "رابط"}
                 </button>
               ))}
+              <button type="button" onClick={(e) => { e.stopPropagation(); setPickerOpen(true); }}
+                className="flex items-center gap-1 rounded-full gradient-violet px-3 py-1 font-bold transition-transform hover:scale-105">
+                <Search className="size-3" />بحث Giphy
+              </button>
             </div>
             {gifMode === "file" ? (
               <input type="file" accept="image/gif,image/*" onChange={(e) => setGifFile(e.target.files?.[0] ?? null)} className="field" />
             ) : (
               <input className="field" dir="ltr" value={gifLink} onChange={(e) => setGifLink(e.target.value)} placeholder="https://...gif" />
             )}
+            {gifMode === "link" && gifLink && (
+              <button type="button" onClick={(e) => { e.stopPropagation(); setPickerOpen(true); }} className="block w-24 overflow-hidden rounded-xl ring-2 ring-primary transition hover:opacity-80">
+                <img src={gifLink} alt="" className="aspect-square w-full object-cover" />
+              </button>
+            )}
+            <GifPicker
+              open={pickerOpen}
+              onOpenChange={setPickerOpen}
+              initialKeywords={sugg?.gifKeywords.length ? sugg.gifKeywords : title.trim() ? [title.trim()] : []}
+              selected={gifLink}
+              onSelect={(url) => { setGifMode("link"); setGifLink(url); }}
+            />
           </div>
         ) : (
           <div>
