@@ -46,7 +46,8 @@ async function transcribe(key: string, audioB64: string): Promise<string> {
 
 async function readSse(
   res: Response,
-  pick: (ev: Record<string, unknown>) => { delta?: string; done?: string } | null,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  pick: (ev: any) => { delta?: string; done?: string } | null,
 ): Promise<string> {
   const reader = res.body!.getReader();
   const dec = new TextDecoder();
