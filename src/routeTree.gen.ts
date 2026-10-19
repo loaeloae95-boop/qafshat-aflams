@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as EditorRouteImport } from './routes/editor'
 import { Route as LibraryRouteImport } from './routes/library'
 import { Route as StudioRouteImport } from './routes/studio'
 import { Route as TrendingRouteImport } from './routes/trending'
@@ -29,6 +30,11 @@ const AccountRoute = AccountRouteImport.update({
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EditorRoute = EditorRouteImport.update({
+  id: '/editor',
+  path: '/editor',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LibraryRoute = LibraryRouteImport.update({
@@ -51,6 +57,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
   '/auth': typeof AuthRoute
+  '/editor': typeof EditorRoute
   '/library': typeof LibraryRoute
   '/studio': typeof StudioRoute
   '/trending': typeof TrendingRoute
@@ -59,6 +66,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
   '/auth': typeof AuthRoute
+  '/editor': typeof EditorRoute
   '/library': typeof LibraryRoute
   '/studio': typeof StudioRoute
   '/trending': typeof TrendingRoute
@@ -68,20 +76,36 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
   '/auth': typeof AuthRoute
+  '/editor': typeof EditorRoute
   '/library': typeof LibraryRoute
   '/studio': typeof StudioRoute
   '/trending': typeof TrendingRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/account' | '/auth' | '/library' | '/studio' | '/trending'
+  fullPaths:
+    | '/'
+    | '/account'
+    | '/auth'
+    | '/editor'
+    | '/library'
+    | '/studio'
+    | '/trending'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/account' | '/auth' | '/library' | '/studio' | '/trending'
+  to:
+    | '/'
+    | '/account'
+    | '/auth'
+    | '/editor'
+    | '/library'
+    | '/studio'
+    | '/trending'
   id:
     | '__root__'
     | '/'
     | '/account'
     | '/auth'
+    | '/editor'
     | '/library'
     | '/studio'
     | '/trending'
@@ -91,6 +115,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AccountRoute: typeof AccountRoute
   AuthRoute: typeof AuthRoute
+  EditorRoute: typeof EditorRoute
   LibraryRoute: typeof LibraryRoute
   StudioRoute: typeof StudioRoute
   TrendingRoute: typeof TrendingRoute
@@ -117,6 +142,13 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/editor': {
+      id: '/editor'
+      path: '/editor'
+      fullPath: '/editor'
+      preLoaderRoute: typeof EditorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/library': {
@@ -147,6 +179,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AccountRoute: AccountRoute,
   AuthRoute: AuthRoute,
+  EditorRoute: EditorRoute,
   LibraryRoute: LibraryRoute,
   StudioRoute: StudioRoute,
   TrendingRoute: TrendingRoute,
