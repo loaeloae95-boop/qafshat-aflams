@@ -16,9 +16,9 @@ describe("editor timeline", () => {
   });
   it("splits an audio clip keeping its timeline position", () => {
     const r = splitAud([aud], "a", 4);
-    expect(r[1].start).toBe(4);
-    expect(r[1].in).toBe(2);
-    expect(r[0].out).toBe(2);
+    expect(r[1]!.start).toBe(4);
+    expect(r[1]!.in).toBe(2);
+    expect(r[0]!.out).toBe(2);
   });
   it("left-trimming audio moves its start with the content", () => {
     const r = trimAud(aud, "l", 1);
