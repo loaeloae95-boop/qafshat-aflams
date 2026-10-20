@@ -28,6 +28,8 @@ export const Route = createFileRoute("/studio")({
   component: Studio,
 });
 
+const MAX_SECONDS = 60;
+
 type AiState = "idle" | "working" | "done" | "error";
 
 function Studio() {
@@ -68,7 +70,7 @@ function Studio() {
       setAi("working"); setAiMsg("نستخرج الصوت..."); setSugg(null); setGifs([]); setGifNote("");
       try {
         const { extractSpeech, blobToBase64 } = await import("@/lib/media-tools");
-        const speech = await extractSpeech(file, 0, duration);
+        const speech = await extractSpeech(file, 0, Math.min(duration, MAX_SECONDS));
         if (cancelled) return;
         setAiMsg("نسمع القفشة ونتعرّف عليها...");
         const res = await analyze({ data: { audio: await blobToBase64(speech) } });
@@ -87,8 +89,8 @@ function Studio() {
         }
       } catch (err) {
         if (cancelled) return;
-        setAi("error");
-        setAiMsg(err instanceof Error ? err.message : "تعذّر التحليل");
+        console.error("AI analyze failed", err);
+        setAi("idle");
       }
     })();
     return () => { cancelled = true; };
@@ -154,7 +156,9 @@ function Studio() {
       await qc.invalidateQueries({ queryKey: ["clips"] });
       navigate({ to: "/library" });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "فشل الرفع");
+      console.error("upload failed", err);
+      const m = err && typeof err === "object" && "message" in err ? String((err as { message: unknown }).message) : "";
+      toast.error(m ? `فشل الرفع: ${m}` : "فشل الرفع");
     } finally {
       setBusy("");
     }
@@ -188,7 +192,10 @@ function Studio() {
         </div>
 
         {file && (
-          <MediaTrimmer file={file} type={type} gifUrl={gifPreview} range={range} onRange={setRange} onDuration={setDuration} />
+          <MediaTrimmer file={file} type={type} gifUrl={gifPreview} range={range} onRange={(r) => setRange(r[1] - r[0] > MAX_SECONDS ? [r[0], r[0] + MAX_SECONDS] : r)} onDuration={(d) => { setDuration(d); setRange([0, Math.min(d, MAX_SECONDS)]); if (d > MAX_SECONDS) toast.info(`سيتم قص القفشة تلقائيًا إلى ${MAX_SECONDS} ثانية`); }} />
+        )}
+        {file && duration > MAX_SECONDS && (
+          <p className="text-xs text-muted-foreground">الحد الأقصى {MAX_SECONDS} ثانية — حرّك المقبض لاختيار الجزء المطلوب.</p>
         )}
 
         {ai !== "idle" && (
