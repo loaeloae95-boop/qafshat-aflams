@@ -121,17 +121,26 @@ export const analyzeClip = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i) => z.object({ audio: z.string().min(10).max(6_000_000) }).parse(i))
   .handler(async ({ data }): Promise<ClipSuggestion> => {
+    const empty: ClipSuggestion = { transcript: "", title: "", actor: "", source: "", gifKeywords: [] };
     const key = process.env["LOVABLE_API_KEY"];
-    if (!key) throw new Error("LOVABLE_API_KEY missing");
-    const transcript = (await transcribe(key, data.audio)).trim();
-    const meta = await analyze(key, transcript);
-    return {
-      transcript,
-      title: meta.title ?? "",
-      actor: meta.actor ?? "",
-      source: meta.source ?? "",
-      gifKeywords: (meta.gif_keywords ?? []).slice(0, 6),
-    };
+    if (!key) {
+      console.error("analyzeClip: AI key not configured");
+      return empty;
+    }
+    try {
+      const transcript = (await transcribe(key, data.audio)).trim();
+      const meta = await analyze(key, transcript);
+      return {
+        transcript,
+        title: meta.title ?? "",
+        actor: meta.actor ?? "",
+        source: meta.source ?? "",
+        gifKeywords: (meta.gif_keywords ?? []).slice(0, 6),
+      };
+    } catch (e) {
+      console.error("analyzeClip failed", e);
+      return empty;
+    }
   });
 
 export type GifResult = { id: string; url: string; preview: string };

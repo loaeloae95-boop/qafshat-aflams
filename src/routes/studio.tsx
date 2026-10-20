@@ -28,6 +28,8 @@ export const Route = createFileRoute("/studio")({
   component: Studio,
 });
 
+const MAX_SECONDS = 60;
+
 type AiState = "idle" | "working" | "done" | "error";
 
 function Studio() {
@@ -68,7 +70,7 @@ function Studio() {
       setAi("working"); setAiMsg("نستخرج الصوت..."); setSugg(null); setGifs([]); setGifNote("");
       try {
         const { extractSpeech, blobToBase64 } = await import("@/lib/media-tools");
-        const speech = await extractSpeech(file, 0, duration);
+        const speech = await extractSpeech(file, 0, Math.min(duration, MAX_SECONDS));
         if (cancelled) return;
         setAiMsg("نسمع القفشة ونتعرّف عليها...");
         const res = await analyze({ data: { audio: await blobToBase64(speech) } });
@@ -87,8 +89,8 @@ function Studio() {
         }
       } catch (err) {
         if (cancelled) return;
-        setAi("error");
-        setAiMsg(err instanceof Error ? err.message : "تعذّر التحليل");
+        console.error("AI analyze failed", err);
+        setAi("idle");
       }
     })();
     return () => { cancelled = true; };
@@ -98,10 +100,10 @@ function Studio() {
   if (!loading && !user) return <AppShell><h1 className="font-display text-2xl font-extrabold">رفع قفشة</h1><SignInPrompt text="سجّل الدخول لرفع قفشاتك" /></AppShell>;
 
   const upload = async (f: File, kind: string) => {
-    const ext = f.name.split(".").pop() || "bin";
+    const ext = (f.name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "") || "bin";
     const path = `${user!.id}/${kind}-${crypto.randomUUID()}.${ext}`;
-    const { error } = await supabase.storage.from("media").upload(path, f, { contentType: f.type });
-    if (error) throw error;
+    const { error } = await supabase.storage.from("media").upload(path, f, { contentType: f.type || "application/octet-stream", upsert: false });
+    if (error) throw new Error(`فشل رفع الملف: ${error.message}`);
     return path;
   };
 
@@ -113,15 +115,24 @@ function Studio() {
     if (!user || !file) { toast.error("اختر ملف القفشة"); return; }
     if (!title.trim()) { toast.error("اسم القفشة مطلوب"); return; }
     if (gifMode === "link" && gifLink && !/^https?:\/\//.test(gifLink)) { toast.error("رابط الصورة المتحركة غير صالح"); return; }
+    if (file.size > 50 * 1024 * 1024) { toast.error("الملف أكبر من 50 ميجابايت"); return; }
     try {
       let final = file;
       let len: number | null = duration || null;
-      const trimmed = duration > 0 && (range[0] > 0.05 || range[1] < duration - 0.05);
+      const start = range[0];
+      const end = Math.min(range[1] || duration, start + MAX_SECONDS);
+      const trimmed = duration > 0 && (start > 0.05 || end < duration - 0.05);
       if (trimmed) {
         setBusy("جارٍ القص...");
-        const { trimMedia } = await import("@/lib/media-tools");
-        final = await trimMedia(file, range[0], range[1]);
-        len = range[1] - range[0];
+        try {
+          const { trimMedia } = await import("@/lib/media-tools");
+          final = await trimMedia(file, start, end);
+          len = end - start;
+        } catch (err) {
+          console.error("trim failed", err);
+          if (duration > MAX_SECONDS + 0.5) { toast.error(`تعذّر القص — الحد الأقصى ${MAX_SECONDS} ثانية`); return; }
+          final = file;
+        }
       }
       setBusy("جارٍ الرفع...");
       const mediaPath = await upload(final, type);
@@ -145,7 +156,9 @@ function Studio() {
       await qc.invalidateQueries({ queryKey: ["clips"] });
       navigate({ to: "/library" });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "فشل الرفع");
+      console.error("upload failed", err);
+      const m = err && typeof err === "object" && "message" in err ? String((err as { message: unknown }).message) : "";
+      toast.error(m ? `فشل الرفع: ${m}` : "فشل الرفع");
     } finally {
       setBusy("");
     }
@@ -179,7 +192,10 @@ function Studio() {
         </div>
 
         {file && (
-          <MediaTrimmer file={file} type={type} gifUrl={gifPreview} range={range} onRange={setRange} onDuration={setDuration} />
+          <MediaTrimmer file={file} type={type} gifUrl={gifPreview} range={range} onRange={(r) => setRange(r[1] - r[0] > MAX_SECONDS ? [r[0], r[0] + MAX_SECONDS] : r)} onDuration={(d) => { setDuration(d); setRange([0, Math.min(d, MAX_SECONDS)]); if (d > MAX_SECONDS) toast.info(`سيتم قص القفشة تلقائيًا إلى ${MAX_SECONDS} ثانية`); }} />
+        )}
+        {file && duration > MAX_SECONDS && (
+          <p className="text-xs text-muted-foreground">الحد الأقصى {MAX_SECONDS} ثانية — حرّك المقبض لاختيار الجزء المطلوب.</p>
         )}
 
         {ai !== "idle" && (
