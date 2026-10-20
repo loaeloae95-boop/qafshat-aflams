@@ -98,10 +98,10 @@ function Studio() {
   if (!loading && !user) return <AppShell><h1 className="font-display text-2xl font-extrabold">رفع قفشة</h1><SignInPrompt text="سجّل الدخول لرفع قفشاتك" /></AppShell>;
 
   const upload = async (f: File, kind: string) => {
-    const ext = f.name.split(".").pop() || "bin";
+    const ext = (f.name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "") || "bin";
     const path = `${user!.id}/${kind}-${crypto.randomUUID()}.${ext}`;
-    const { error } = await supabase.storage.from("media").upload(path, f, { contentType: f.type });
-    if (error) throw error;
+    const { error } = await supabase.storage.from("media").upload(path, f, { contentType: f.type || "application/octet-stream", upsert: false });
+    if (error) throw new Error(`فشل رفع الملف: ${error.message}`);
     return path;
   };
 
@@ -113,15 +113,24 @@ function Studio() {
     if (!user || !file) { toast.error("اختر ملف القفشة"); return; }
     if (!title.trim()) { toast.error("اسم القفشة مطلوب"); return; }
     if (gifMode === "link" && gifLink && !/^https?:\/\//.test(gifLink)) { toast.error("رابط الصورة المتحركة غير صالح"); return; }
+    if (file.size > 50 * 1024 * 1024) { toast.error("الملف أكبر من 50 ميجابايت"); return; }
     try {
       let final = file;
       let len: number | null = duration || null;
-      const trimmed = duration > 0 && (range[0] > 0.05 || range[1] < duration - 0.05);
+      const start = range[0];
+      const end = Math.min(range[1] || duration, start + MAX_SECONDS);
+      const trimmed = duration > 0 && (start > 0.05 || end < duration - 0.05);
       if (trimmed) {
         setBusy("جارٍ القص...");
-        const { trimMedia } = await import("@/lib/media-tools");
-        final = await trimMedia(file, range[0], range[1]);
-        len = range[1] - range[0];
+        try {
+          const { trimMedia } = await import("@/lib/media-tools");
+          final = await trimMedia(file, start, end);
+          len = end - start;
+        } catch (err) {
+          console.error("trim failed", err);
+          if (duration > MAX_SECONDS + 0.5) { toast.error(`تعذّر القص — الحد الأقصى ${MAX_SECONDS} ثانية`); return; }
+          final = file;
+        }
       }
       setBusy("جارٍ الرفع...");
       const mediaPath = await upload(final, type);
