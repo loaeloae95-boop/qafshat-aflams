@@ -113,3 +113,7 @@
   scrollbar-width: none;
   &::-webkit-scrollbar { display: none; }
 }
+
+@utility tool-btn {
+  @apply flex cursor-pointer flex-col items-center justify-center gap-1 rounded-2xl bg-surface px-2 py-3 text-center text-[11px] font-bold transition hover:scale-[1.03] active:scale-95;
+}

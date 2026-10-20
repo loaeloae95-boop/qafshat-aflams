@@ -1,9 +1,9 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Check, Loader2, Music, Search, Sparkles, Video } from "lucide-react";
+import { Check, Loader2, Music, Scissors, Search, Sparkles, Video } from "lucide-react";
 import { GifPicker } from "@/components/GifPicker";
 import { AppShell } from "@/components/AppShell";
 import { SignInPrompt } from "@/components/SignInPrompt";
@@ -158,7 +158,10 @@ function Studio() {
 
   return (
     <AppShell>
-      <h1 className="font-display text-2xl font-extrabold">رفع قفشة</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="font-display text-2xl font-extrabold">رفع قفشة</h1>
+        <Link to="/editor" className="flex items-center gap-1 rounded-full gradient-violet px-4 py-2 text-xs font-bold shadow-glow"><Scissors className="size-4" />المحرر</Link>
+      </div>
       <form onSubmit={submit} className="glass-panel mt-5 space-y-4 rounded-3xl p-5">
         <div className="grid grid-cols-2 gap-2">
           {(["video", "audio"] as const).map((t) => (
