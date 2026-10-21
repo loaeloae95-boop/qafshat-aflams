@@ -35,7 +35,10 @@ function AuthPage() {
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: window.location.origin, data: { display_name: name.trim() || email.split("@")[0] } },
+          options: {
+            emailRedirectTo: window.location.origin,
+            data: { display_name: name.trim() || email.split("@")[0] },
+          },
         });
         if (error) throw error;
         if (!data.session) {
@@ -56,25 +59,65 @@ function AuthPage() {
   };
 
   const google = async () => {
-    const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
+    const r = await lovable.auth.signInWithOAuth("google", {
+      redirect_uri: window.location.origin,
+    });
     if (r.error) toast.error("تعذر الدخول عبر Google");
     else if (!r.redirected) navigate({ to: "/" });
   };
 
   return (
     <AppShell>
-      <h1 className="font-display text-2xl font-extrabold">{mode === "signin" ? "تسجيل الدخول" : "إنشاء حساب"}</h1>
+      <h1 className="font-display text-2xl font-extrabold">
+        {mode === "signin" ? "تسجيل الدخول" : "إنشاء حساب"}
+      </h1>
       <form onSubmit={submit} className="glass-panel mt-5 space-y-3 rounded-3xl p-5">
-        {mode === "signup" && <input className="field" placeholder="الاسم الظاهر" value={name} onChange={(e) => setName(e.target.value)} />}
-        <input className="field" type="email" dir="ltr" placeholder="البريد الإلكتروني" required value={email} onChange={(e) => setEmail(e.target.value)} />
-        <input className="field" type="password" dir="ltr" placeholder="كلمة المرور (6 أحرف على الأقل)" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} />
-        <button type="submit" disabled={busy} className="w-full rounded-2xl bg-primary py-3 text-sm font-bold text-primary-foreground disabled:opacity-50">
+        {mode === "signup" && (
+          <input
+            className="field"
+            placeholder="الاسم الظاهر"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        )}
+        <input
+          className="field"
+          type="email"
+          dir="ltr"
+          placeholder="البريد الإلكتروني"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        <input
+          className="field"
+          type="password"
+          dir="ltr"
+          placeholder="كلمة المرور (6 أحرف على الأقل)"
+          required
+          minLength={6}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+        <button
+          type="submit"
+          disabled={busy}
+          className="w-full rounded-2xl bg-primary py-3 text-sm font-bold text-primary-foreground disabled:opacity-50"
+        >
           {busy ? "..." : mode === "signin" ? "دخول" : "إنشاء الحساب"}
         </button>
-        <button type="button" onClick={google} className="w-full rounded-2xl bg-secondary py-3 text-sm font-bold">
+        <button
+          type="button"
+          onClick={google}
+          className="w-full rounded-2xl bg-secondary py-3 text-sm font-bold"
+        >
           المتابعة باستخدام Google
         </button>
-        <button type="button" onClick={() => setMode(mode === "signin" ? "signup" : "signin")} className="w-full text-center text-xs text-muted-foreground">
+        <button
+          type="button"
+          onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
+          className="w-full text-center text-xs text-muted-foreground"
+        >
           {mode === "signin" ? "ليس لديك حساب؟ أنشئ واحداً" : "لديك حساب؟ سجّل الدخول"}
         </button>
       </form>

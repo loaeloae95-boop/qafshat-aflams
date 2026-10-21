@@ -80,13 +80,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "قفشات أفلام" },
-      { name: "description", content: "ابحث وشارك أشهر قفشات الأفلام والمسرحيات." },
-      { property: "og:title", content: "قفشات أفلام" },
-      { property: "og:description", content: "ابحث وشارك أشهر قفشات الأفلام والمسرحيات." },
+      { title: "قفشات أفلام - Qafshat Aflam" },
+      {
+        name: "description",
+        content: "ابحث وشارك أشهر قفشات الأفلام والمسرحيات صوتاً وصورة وقم بتعديل وصناعة المقاطع.",
+      },
+      { property: "og:title", content: "قفشات أفلام - Qafshat Aflam" },
+      {
+        property: "og:description",
+        content: "ابحث وشارك أشهر قفشات الأفلام والمسرحيات صوتاً وصورة وقم بتعديل وصناعة المقاطع.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
       {

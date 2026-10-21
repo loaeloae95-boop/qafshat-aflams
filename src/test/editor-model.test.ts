@@ -1,8 +1,35 @@
 import { describe, expect, it } from "vitest";
-import { projectTotal, segAt, splitAud, splitSegs, trimAud, type Aud, type Seg } from "@/lib/editor-model";
+import {
+  projectTotal,
+  segAt,
+  splitAud,
+  splitSegs,
+  trimAud,
+  type Aud,
+  type Seg,
+} from "@/lib/editor-model";
 
-const seg = (id: string, i: number, o: number): Seg => ({ id, kind: "video", src: "x", name: "", in: i, out: o, srcDur: 10, mute: false });
-const aud: Aud = { id: "a", src: "y", name: "", in: 0, out: 6, srcDur: 6, start: 2, volume: 1, mute: false };
+const seg = (id: string, i: number, o: number): Seg => ({
+  id,
+  kind: "video",
+  src: "x",
+  name: "",
+  in: i,
+  out: o,
+  srcDur: 10,
+  mute: false,
+});
+const aud: Aud = {
+  id: "a",
+  src: "y",
+  name: "",
+  in: 0,
+  out: 6,
+  srcDur: 6,
+  start: 2,
+  volume: 1,
+  mute: false,
+};
 
 describe("editor timeline", () => {
   it("finds the segment under the playhead", () => {
@@ -12,7 +39,10 @@ describe("editor timeline", () => {
   });
   it("splits a video segment at the playhead into two", () => {
     const r = splitSegs([seg("1", 0, 4)], 1.5);
-    expect(r.map((s) => [s.in, s.out])).toEqual([[0, 1.5], [1.5, 4]]);
+    expect(r.map((s) => [s.in, s.out])).toEqual([
+      [0, 1.5],
+      [1.5, 4],
+    ]);
   });
   it("splits an audio clip keeping its timeline position", () => {
     const r = splitAud([aud], "a", 4);

@@ -32,7 +32,9 @@ function Library() {
       ) : (
         <>
           <ClipGrid clips={mine} onDelete={(c) => confirm("حذف هذه القفشة؟") && del.mutate(c.id)} />
-          {mine.length === 0 && <p className="mt-10 text-center text-sm text-muted-foreground">لم ترفع أي قفشة بعد</p>}
+          {mine.length === 0 && (
+            <p className="mt-10 text-center text-sm text-muted-foreground">لم ترفع أي قفشة بعد</p>
+          )}
         </>
       )}
     </AppShell>

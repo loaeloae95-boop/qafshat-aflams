@@ -29,10 +29,15 @@ function Account() {
         <div className="glass-panel space-y-4 rounded-3xl p-5">
           <div>
             <p className="text-xs text-muted-foreground">البريد</p>
-            <p className="text-sm font-bold" dir="ltr">{user.email}</p>
+            <p className="text-sm font-bold" dir="ltr">
+              {user.email}
+            </p>
           </div>
           <button
-            onClick={async () => { await supabase.auth.signOut(); navigate({ to: "/" }); }}
+            onClick={async () => {
+              await supabase.auth.signOut();
+              navigate({ to: "/" });
+            }}
             className="w-full rounded-2xl bg-secondary py-3 text-sm font-bold"
           >
             تسجيل الخروج
@@ -41,7 +46,9 @@ function Account() {
       )}
       <div className="glass-panel mt-4 rounded-3xl p-5 text-sm text-muted-foreground">
         <p className="font-bold text-foreground">📱 ثبّت التطبيق على هاتفك</p>
-        <p className="mt-1">من متصفح الهاتف اختر «إضافة إلى الشاشة الرئيسية» ليظهر قفشات أفلام كأيقونة تطبيق.</p>
+        <p className="mt-1">
+          من متصفح الهاتف اختر «إضافة إلى الشاشة الرئيسية» ليظهر قفشات أفلام كأيقونة تطبيق.
+        </p>
       </div>
     </AppShell>
   );

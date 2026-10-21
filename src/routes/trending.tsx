@@ -20,7 +20,10 @@ export const Route = createFileRoute("/trending")({
 
 function Trending() {
   const { data = [] } = useClips();
-  const sorted = useMemo(() => [...data].sort((a, b) => b.plays + b.likes - (a.plays + a.likes)), [data]);
+  const sorted = useMemo(
+    () => [...data].sort((a, b) => b.plays + b.likes - (a.plays + a.likes)),
+    [data],
+  );
   return (
     <AppShell>
       <h1 className="mb-5 font-display text-2xl font-extrabold">🔥 الرائج</h1>

@@ -12,7 +12,10 @@ export const Route = createFileRoute("/")({
       { title: "قفشات أفلام — شارك أشهر المقاطع" },
       { name: "description", content: "ابحث وشارك أشهر قفشات الأفلام والمسرحيات صوتاً وصورة." },
       { property: "og:title", content: "قفشات أفلام" },
-      { property: "og:description", content: "ابحث وشارك أشهر قفشات الأفلام والمسرحيات صوتاً وصورة." },
+      {
+        property: "og:description",
+        content: "ابحث وشارك أشهر قفشات الأفلام والمسرحيات صوتاً وصورة.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -26,7 +29,9 @@ function Index() {
   const [active, setActive] = useState<string>(ALL);
 
   const tabs = useMemo(() => {
-    const extra = all.map((c) => c.category).filter((c): c is string => !!c && !(CLIP_CATEGORIES as readonly string[]).includes(c));
+    const extra = all
+      .map((c) => c.category)
+      .filter((c): c is string => !!c && !(CLIP_CATEGORIES as readonly string[]).includes(c));
     return [ALL, ...CLIP_CATEGORIES, ...Array.from(new Set(extra))];
   }, [all]);
   const filtered = useMemo(() => filterClips(all, query, active), [all, query, active]);
@@ -54,7 +59,9 @@ function Index() {
             onClick={() => setActive(c)}
             className={cn(
               "shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition",
-              active === c ? "gradient-violet shadow-glow" : "bg-surface text-muted-foreground ring-1 ring-border",
+              active === c
+                ? "gradient-violet shadow-glow"
+                : "bg-surface text-muted-foreground ring-1 ring-border",
             )}
           >
             {c}
@@ -65,7 +72,9 @@ function Index() {
         <ClipGrid clips={filtered} />
       </div>
       {!isLoading && filtered.length === 0 && (
-        <p className="mt-10 text-center text-sm text-muted-foreground">لا توجد قفشات هنا بعد — ارفع أول قفشة من تبويب «رفع»</p>
+        <p className="mt-10 text-center text-sm text-muted-foreground">
+          لا توجد قفشات هنا بعد — ارفع أول قفشة من تبويب «رفع»
+        </p>
       )}
     </AppShell>
   );

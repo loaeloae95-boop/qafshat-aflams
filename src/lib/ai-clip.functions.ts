@@ -13,12 +13,22 @@ export type ClipSuggestion = {
 };
 
 class GatewayError extends Error {
-  constructor(public status: number, message: string) { super(message); }
+  constructor(
+    public status: number,
+    message: string,
+  ) {
+    super(message);
+  }
 }
 
 async function gatewayFail(res: Response, what: string): Promise<never> {
   let msg = "";
-  try { const j = await res.json(); msg = j?.error?.message || j?.message || ""; } catch { /* ignore */ }
+  try {
+    const j = await res.json();
+    msg = j?.error?.message || j?.message || "";
+  } catch {
+    /* ignore */
+  }
   if (res.status === 402) msg ||= "رصيد الذكاء الاصطناعي نفد";
   if (res.status === 429) msg ||= "طلبات كثيرة، حاول بعد قليل";
   throw new GatewayError(res.status, `${what}: ${msg || res.status}`);
@@ -67,7 +77,8 @@ async function readSse(
       if (!payload || payload === "[DONE]") continue;
       try {
         const ev = JSON.parse(payload);
-        if (ev.type === "error" || ev.type === "response.failed") throw new GatewayError(500, ev?.error?.message || "AI error");
+        if (ev.type === "error" || ev.type === "response.failed")
+          throw new GatewayError(500, ev?.error?.message || "AI error");
         const p = pick(ev);
         if (p?.delta) out += p.delta;
         if (p?.done != null) final = p.done;
@@ -86,15 +97,26 @@ const SCHEMA = {
   properties: {
     title: { type: "string", description: "عنوان قصير جذاب للقفشة بالعربية، مثل: قفشة بوحة" },
     actor: { type: "string", description: "اسم الممثل الأرجح بالعربية، أو فارغ إن لم يُعرف" },
-    source: { type: "string", description: "اسم الفيلم/المسرحية/المسلسل مع نوعه، مثل: فيلم بوحة، أو فارغ" },
-    gif_keywords: { type: "array", items: { type: "string" }, description: "3-6 English emotion/semantic GIF search keywords" },
+    source: {
+      type: "string",
+      description: "اسم الفيلم/المسرحية/المسلسل مع نوعه، مثل: فيلم بوحة، أو فارغ",
+    },
+    gif_keywords: {
+      type: "array",
+      items: { type: "string" },
+      description: "3-6 English emotion/semantic GIF search keywords",
+    },
   },
 };
 
 async function analyze(key: string, transcript: string) {
   const res = await fetch(`${GATEWAY}/responses`, {
     method: "POST",
-    headers: { "Lovable-API-Key": key, "X-Lovable-AIG-SDK": "fetch", "Content-Type": "application/json" },
+    headers: {
+      "Lovable-API-Key": key,
+      "X-Lovable-AIG-SDK": "fetch",
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({
       model: "openai/gpt-6-astra",
       stream: true,
@@ -113,7 +135,12 @@ async function analyze(key: string, transcript: string) {
     if (ev.type === "response.output_text.delta") return { delta: String(ev.delta ?? "") };
     return null;
   });
-  const j = JSON.parse(text) as { title: string; actor: string; source: string; gif_keywords: string[] };
+  const j = JSON.parse(text) as {
+    title: string;
+    actor: string;
+    source: string;
+    gif_keywords: string[];
+  };
   return j;
 }
 
@@ -121,7 +148,13 @@ export const analyzeClip = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((i) => z.object({ audio: z.string().min(10).max(6_000_000) }).parse(i))
   .handler(async ({ data }): Promise<ClipSuggestion> => {
-    const empty: ClipSuggestion = { transcript: "", title: "", actor: "", source: "", gifKeywords: [] };
+    const empty: ClipSuggestion = {
+      transcript: "",
+      title: "",
+      actor: "",
+      source: "",
+      gifKeywords: [],
+    };
     const key = process.env["LOVABLE_API_KEY"];
     if (!key) {
       console.error("analyzeClip: AI key not configured");
@@ -159,8 +192,13 @@ export const searchGifs = createServerFn({ method: "POST" })
         const u = new URL("https://api.giphy.com/v1/gifs/search");
         u.search = new URLSearchParams({ api_key: key, q, limit: per, rating: "pg-13" }).toString();
         const r = await fetch(u.toString());
-        if (!r.ok) { console.error("giphy", r.status); return []; }
-        const j = (await r.json()) as { data?: { id: string; images: Record<string, { url?: string }> }[] };
+        if (!r.ok) {
+          console.error("giphy", r.status);
+          return [];
+        }
+        const j = (await r.json()) as {
+          data?: { id: string; images: Record<string, { url?: string }> }[];
+        };
         return j.data ?? [];
       }),
     );

@@ -48,7 +48,9 @@ export function ClipVisual({
   if (clip.mediaType === "video") {
     return (
       <video
-        ref={(el) => { mediaRef.current = el; }}
+        ref={(el) => {
+          mediaRef.current = el;
+        }}
         src={clip.mediaUrl}
         poster={clip.coverUrl ?? undefined}
         playsInline
@@ -65,9 +67,19 @@ export function ClipVisual({
       {bg ? (
         <img src={bg} alt="" className={`absolute inset-0 h-full w-full ${objectFit}`} />
       ) : (
-        <div className="absolute inset-0 grid place-items-center"><Music className="size-8 opacity-70" /></div>
+        <div className="absolute inset-0 grid place-items-center">
+          <Music className="size-8 opacity-70" />
+        </div>
       )}
-      <audio ref={(el) => { mediaRef.current = el; }} src={clip.mediaUrl} loop={loop} preload="metadata" {...handlers} />
+      <audio
+        ref={(el) => {
+          mediaRef.current = el;
+        }}
+        src={clip.mediaUrl}
+        loop={loop}
+        preload="metadata"
+        {...handlers}
+      />
     </>
   );
 }

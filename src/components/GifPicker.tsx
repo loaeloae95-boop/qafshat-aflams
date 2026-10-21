@@ -27,9 +27,13 @@ export function GifPicker({
   const [note, setNote] = useState("");
 
   const run = async (keywords: string[]) => {
-    const kw = keywords.map((k) => k.trim()).filter(Boolean).slice(0, 6);
+    const kw = keywords
+      .map((k) => k.trim())
+      .filter(Boolean)
+      .slice(0, 6);
     if (!kw.length) return;
-    setBusy(true); setNote("");
+    setBusy(true);
+    setNote("");
     try {
       const r = await find({ data: { keywords: kw } });
       setGifs(r.gifs);
@@ -51,7 +55,14 @@ export function GifPicker({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent dir="rtl" className="glass-panel max-w-md rounded-3xl border-border" onClick={stop} onPointerDown={stop} onKeyDown={stop} onSubmit={stop}>
+      <DialogContent
+        dir="rtl"
+        className="glass-panel max-w-md rounded-3xl border-border"
+        onClick={stop}
+        onPointerDown={stop}
+        onKeyDown={stop}
+        onSubmit={stop}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 font-display text-base">
             <Sparkles className="size-4" /> اختر صورة متحركة
@@ -66,13 +77,18 @@ export function GifPicker({
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => {
               e.stopPropagation();
-              if (e.key === "Enter") { e.preventDefault(); run([q]); }
+              if (e.key === "Enter") {
+                e.preventDefault();
+                run([q]);
+              }
             }}
             placeholder='ابحث: "عادل إمام"، "ضحك"...'
           />
         </div>
         {!q && initialKeywords.length > 0 && (
-          <p className="text-[11px] text-muted-foreground">نتائج مقترحة من الذكاء الاصطناعي: {initialKeywords.slice(0, 3).join("، ")}</p>
+          <p className="text-[11px] text-muted-foreground">
+            نتائج مقترحة من الذكاء الاصطناعي: {initialKeywords.slice(0, 3).join("، ")}
+          </p>
         )}
         <div className="relative grid min-h-48 grid-cols-3 grid-rows-2 gap-2">
           {busy && (
@@ -86,16 +102,30 @@ export function GifPicker({
               <button
                 key={g.id}
                 type="button"
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onSelect(g.url); onOpenChange(false); }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onSelect(g.url);
+                  onOpenChange(false);
+                }}
                 style={{ animationDelay: `${i * 50}ms` }}
                 className={cn(
                   "group relative aspect-square overflow-hidden rounded-xl bg-surface animate-in fade-in zoom-in-95 fill-mode-both transition-all duration-300 hover:-translate-y-0.5 hover:shadow-glow hover:ring-2 hover:ring-primary/60",
                   on && "ring-2 ring-primary",
                 )}
               >
-                <img src={g.preview} alt="" loading="lazy" className="size-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                <img
+                  src={g.preview}
+                  alt=""
+                  loading="lazy"
+                  className="size-full object-cover transition-transform duration-500 group-hover:scale-110"
+                />
                 <span className="absolute inset-0 bg-gradient-to-t from-background/60 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-                {on && <span className="absolute left-1 top-1 rounded-full bg-primary p-0.5 text-primary-foreground"><Check className="size-3" /></span>}
+                {on && (
+                  <span className="absolute left-1 top-1 rounded-full bg-primary p-0.5 text-primary-foreground">
+                    <Check className="size-3" />
+                  </span>
+                )}
               </button>
             );
           })}

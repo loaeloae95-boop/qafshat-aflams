@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pause, Play, Scissors } from "lucide-react";
+import { Music, Pause, Play, Scissors } from "lucide-react";
 import { fmtTime } from "@/lib/media-tools";
 
 const stop = (e: React.SyntheticEvent) => e.stopPropagation();
@@ -28,9 +28,20 @@ export function MediaTrimmer({
   const [playing, setPlaying] = useState(false);
   const [start, end] = range;
 
+  useEffect(() => {
+    setNow(0);
+    setPlaying(false);
+    const m = ref.current;
+    if (m) {
+      m.pause();
+      m.currentTime = 0;
+      m.load();
+    }
+  }, [url]);
+
   const onMeta = () => {
     const d = ref.current?.duration ?? 0;
-    if (!isFinite(d)) return;
+    if (!isFinite(d) || d <= 0) return;
     setDuration(d);
     onDuration(d);
     onRange([0, d]);
@@ -39,13 +50,19 @@ export function MediaTrimmer({
     const m = ref.current;
     if (!m) return;
     setNow(m.currentTime);
-    if (m.currentTime >= end) { m.pause(); m.currentTime = start; }
+    if (m.currentTime >= end) {
+      m.pause();
+      m.currentTime = start;
+    }
   };
   const toggle = (e: React.MouseEvent) => {
     e.stopPropagation();
     const m = ref.current;
     if (!m) return;
-    if (m.paused) { if (m.currentTime < start || m.currentTime >= end) m.currentTime = start; void m.play(); } else m.pause();
+    if (m.paused) {
+      if (m.currentTime < start || m.currentTime >= end) m.currentTime = start;
+      void m.play();
+    } else m.pause();
   };
   const setStart = (v: number) => onRange([Math.min(Math.max(0, v), end - 0.5), end]);
   const setEnd = (v: number) => onRange([start, Math.max(Math.min(duration, v), start + 0.5)]);
@@ -56,8 +73,9 @@ export function MediaTrimmer({
 
   const media = {
     src: url,
-    preload: "metadata" as const,
+    preload: "auto" as const,
     onLoadedMetadata: onMeta,
+    onDurationChange: onMeta,
     onTimeUpdate: onTime,
     onPlay: () => setPlaying(true),
     onPause: () => setPlaying(false),
@@ -67,42 +85,119 @@ export function MediaTrimmer({
     <div className="space-y-3 rounded-2xl bg-surface p-3" onClick={stop}>
       <div className="relative aspect-video overflow-hidden rounded-xl gradient-indigo">
         {type === "video" ? (
-          <video ref={(el) => { ref.current = el; }} playsInline className="absolute inset-0 size-full object-contain" {...media} />
+          <video
+            ref={(el) => {
+              ref.current = el;
+            }}
+            playsInline
+            className="absolute inset-0 size-full object-contain"
+            {...media}
+          />
         ) : (
           <>
-            {gifUrl ? <img src={gifUrl} alt="" className="absolute inset-0 size-full object-cover" /> : null}
-            <audio ref={(el) => { ref.current = el; }} {...media} />
+            {gifUrl ? (
+              <img src={gifUrl} alt="" className="absolute inset-0 size-full object-cover" />
+            ) : (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-primary-foreground/90">
+                <Music
+                  className={`size-12 transition-transform ${playing ? "scale-110" : "opacity-80"}`}
+                />
+                <span className="text-xs font-bold">مشغل ومحرر الصوت</span>
+                <span className="text-[11px] text-primary-foreground/70" dir="ltr">
+                  {fmtTime(now)} / {fmtTime(duration || 0)}
+                </span>
+              </div>
+            )}
+            <audio
+              ref={(el) => {
+                ref.current = el;
+              }}
+              {...media}
+            />
           </>
         )}
-        <button type="button" aria-label="تشغيل" onClick={toggle} className="glass-panel absolute bottom-3 right-3 rounded-full p-3">
+        <button
+          type="button"
+          aria-label="تشغيل"
+          onClick={toggle}
+          className="glass-panel absolute bottom-3 right-3 rounded-full p-3"
+        >
           {playing ? <Pause className="size-5" /> : <Play className="size-5" />}
         </button>
       </div>
 
       <div className="relative mx-4 h-10 touch-none" dir="ltr" onPointerDown={stop}>
         <div className="absolute inset-x-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-secondary" />
-        <div className="absolute top-1/2 h-2 -translate-y-1/2 rounded-full gradient-violet" style={{ left: `${pct(start)}%`, width: `${pct(end - start)}%` }} />
-        <div className="absolute top-1/2 h-4 w-0.5 -translate-y-1/2 bg-accent" style={{ left: `${pct(now)}%` }} />
-        <input aria-label="البداية" type="range" min={0} max={duration || 1} step={0.1} value={start} onChange={(e) => setStart(+e.target.value)} onClick={stop} className={thumb} />
-        <input aria-label="النهاية" type="range" min={0} max={duration || 1} step={0.1} value={end} onChange={(e) => setEnd(+e.target.value)} onClick={stop} className={thumb} />
+        <div
+          className="absolute top-1/2 h-2 -translate-y-1/2 rounded-full gradient-violet"
+          style={{ left: `${pct(start)}%`, width: `${pct(end - start)}%` }}
+        />
+        <div
+          className="absolute top-1/2 h-4 w-0.5 -translate-y-1/2 bg-accent"
+          style={{ left: `${pct(now)}%` }}
+        />
+        <input
+          aria-label="البداية"
+          type="range"
+          min={0}
+          max={duration || 1}
+          step={0.1}
+          value={start}
+          onChange={(e) => setStart(+e.target.value)}
+          onClick={stop}
+          className={thumb}
+        />
+        <input
+          aria-label="النهاية"
+          type="range"
+          min={0}
+          max={duration || 1}
+          step={0.1}
+          value={end}
+          onChange={(e) => setEnd(+e.target.value)}
+          onClick={stop}
+          className={thumb}
+        />
       </div>
 
       <div className="grid grid-cols-3 gap-2 text-xs">
         <label className="space-y-1">
           <span className="block font-bold">البداية (ث)</span>
-          <input type="number" className="field" dir="ltr" min={0} step={0.1} value={start.toFixed(1)} onClick={stop} onChange={(e) => setStart(+e.target.value)} />
+          <input
+            type="number"
+            className="field"
+            dir="ltr"
+            min={0}
+            step={0.1}
+            value={start.toFixed(1)}
+            onClick={stop}
+            onChange={(e) => setStart(+e.target.value)}
+          />
         </label>
         <div className="grid place-items-center rounded-xl bg-secondary p-2 text-center">
           <span className="text-muted-foreground">الآن</span>
-          <span className="font-bold" dir="ltr">{fmtTime(now)}</span>
+          <span className="font-bold" dir="ltr">
+            {fmtTime(now)}
+          </span>
         </div>
         <label className="space-y-1">
           <span className="block font-bold">النهاية (ث)</span>
-          <input type="number" className="field" dir="ltr" min={0} step={0.1} value={end.toFixed(1)} onClick={stop} onChange={(e) => setEnd(+e.target.value)} />
+          <input
+            type="number"
+            className="field"
+            dir="ltr"
+            min={0}
+            step={0.1}
+            value={end.toFixed(1)}
+            onClick={stop}
+            onChange={(e) => setEnd(+e.target.value)}
+          />
         </label>
       </div>
       <p className="flex items-center gap-1 text-xs text-muted-foreground">
-        <Scissors className="size-3" /> المدة المختارة: <span dir="ltr">{fmtTime(Math.max(0, end - start))}</span> — يُقصّ المقطع على جهازك قبل الرفع
+        <Scissors className="size-3" /> المدة المختارة:{" "}
+        <span dir="ltr">{fmtTime(Math.max(0, end - start))}</span> — يُقصّ المقطع على جهازك قبل
+        الرفع
       </p>
     </div>
   );

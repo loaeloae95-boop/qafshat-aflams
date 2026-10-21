@@ -1,0 +1,6 @@
+{
+  "name": "قفشات أفلام - Qafshat Aflam",
+  "description": "ابحث وشارك أشهر قفشات الأفلام والمسرحيات صوتاً وصورة وقم بتعديل وصناعة المقاطع.",
+  "capabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"],
+  "permissions": []
+}

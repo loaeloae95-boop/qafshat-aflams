@@ -7,14 +7,20 @@ const CORE = "https://unpkg.com/@ffmpeg/core@0.12.10/dist/esm";
 async function getFFmpeg(): Promise<FF> {
   if (!ffPromise) {
     ffPromise = (async () => {
-      const [{ FFmpeg }, { toBlobURL }] = await Promise.all([import("@ffmpeg/ffmpeg"), import("@ffmpeg/util")]);
+      const [{ FFmpeg }, { toBlobURL }] = await Promise.all([
+        import("@ffmpeg/ffmpeg"),
+        import("@ffmpeg/util"),
+      ]);
       const ff = new FFmpeg();
       await ff.load({
         coreURL: await toBlobURL(`${CORE}/ffmpeg-core.js`, "text/javascript"),
         wasmURL: await toBlobURL(`${CORE}/ffmpeg-core.wasm`, "application/wasm"),
       });
       return ff;
-    })().catch((e) => { ffPromise = null; throw e; });
+    })().catch((e) => {
+      ffPromise = null;
+      throw e;
+    });
   }
   return ffPromise;
 }
@@ -29,7 +35,19 @@ export async function trimMedia(file: File, start: number, end: number): Promise
   const inName = `in.${ext}`;
   const outName = `out.${ext}`;
   await ff.writeFile(inName, await fetchFile(file));
-  await ff.exec(["-ss", start.toFixed(2), "-i", inName, "-t", (end - start).toFixed(2), "-c", "copy", "-avoid_negative_ts", "make_zero", outName]);
+  await ff.exec([
+    "-ss",
+    start.toFixed(2),
+    "-i",
+    inName,
+    "-t",
+    (end - start).toFixed(2),
+    "-c",
+    "copy",
+    "-avoid_negative_ts",
+    "make_zero",
+    outName,
+  ]);
   const data = (await ff.readFile(outName)) as Uint8Array;
   await ff.deleteFile(inName).catch(() => {});
   await ff.deleteFile(outName).catch(() => {});
@@ -44,7 +62,22 @@ export async function extractSpeech(file: File, start: number, end: number): Pro
   const inName = `src.${extOf(file)}`;
   await ff.writeFile(inName, await fetchFile(file));
   const len = Math.min(end - start, 120);
-  await ff.exec(["-ss", start.toFixed(2), "-i", inName, "-t", len.toFixed(2), "-vn", "-ac", "1", "-ar", "16000", "-b:a", "48k", "speech.mp3"]);
+  await ff.exec([
+    "-ss",
+    start.toFixed(2),
+    "-i",
+    inName,
+    "-t",
+    len.toFixed(2),
+    "-vn",
+    "-ac",
+    "1",
+    "-ar",
+    "16000",
+    "-b:a",
+    "48k",
+    "speech.mp3",
+  ]);
   const data = (await ff.readFile("speech.mp3")) as Uint8Array;
   await ff.deleteFile(inName).catch(() => {});
   await ff.deleteFile("speech.mp3").catch(() => {});
@@ -54,7 +87,8 @@ export async function extractSpeech(file: File, start: number, end: number): Pro
 export async function blobToBase64(b: Blob): Promise<string> {
   const buf = new Uint8Array(await b.arrayBuffer());
   let s = "";
-  for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+  for (let i = 0; i < buf.length; i += 0x8000)
+    s += String.fromCharCode(...buf.subarray(i, i + 0x8000));
   return btoa(s);
 }
 
