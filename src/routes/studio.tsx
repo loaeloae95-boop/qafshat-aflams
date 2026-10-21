@@ -171,10 +171,7 @@ function Studio() {
 
   return (
     <AppShell>
-      <div className="flex items-center justify-between">
-        <h1 className="font-display text-2xl font-extrabold">رفع قفشة</h1>
-        <Link to="/editor" className="flex items-center gap-1 rounded-full gradient-violet px-4 py-2 text-xs font-bold shadow-glow"><Scissors className="size-4" />المحرر</Link>
-      </div>
+      <h1 className="font-display text-2xl font-extrabold">رفع قفشة</h1>
       <form onSubmit={submit} className="glass-panel mt-5 space-y-4 rounded-3xl p-5">
         <div className="grid grid-cols-2 gap-2">
           {(["video", "audio"] as const).map((t) => (
@@ -191,6 +188,7 @@ function Studio() {
           <input key={type} type="file" required accept={type === "video" ? "video/*" : "audio/*"} onChange={(e) => pickFile(e.target.files?.[0] ?? null)} className="field" />
         </div>
 
+        <Link to="/editor" className="flex items-center justify-center gap-2 rounded-2xl gradient-violet py-3 text-sm font-bold shadow-glow"><Scissors className="size-4" />المحرر — تعديل المقطع</Link>
         {file && (
           <MediaTrimmer file={file} type={type} gifUrl={gifPreview} range={range} onRange={(r) => setRange(r[1] - r[0] > MAX_SECONDS ? [r[0], r[0] + MAX_SECONDS] : r)} onDuration={(d) => { setDuration(d); setRange([0, Math.min(d, MAX_SECONDS)]); if (d > MAX_SECONDS) toast.info(`سيتم قص القفشة تلقائيًا إلى ${MAX_SECONDS} ثانية`); }} />
         )}

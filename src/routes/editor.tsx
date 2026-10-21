@@ -249,12 +249,21 @@ function Editor() {
     e.stopPropagation(); e.preventDefault();
     pause();
     const x0 = e.clientX;
-    const target = e.currentTarget as HTMLElement;
-    target.setPointerCapture(e.pointerId);
-    const move = (ev: PointerEvent) => apply((ev.clientX - x0) / PPS);
-    const up = () => { target.removeEventListener("pointermove", move); target.removeEventListener("pointerup", up); };
-    target.addEventListener("pointermove", move);
-    target.addEventListener("pointerup", up);
+    let raf = 0, last = x0;
+    // Listen on window: the handle re-renders while dragging, so element listeners get lost.
+    const move = (ev: PointerEvent) => {
+      ev.preventDefault();
+      last = ev.clientX;
+      if (!raf) raf = requestAnimationFrame(() => { raf = 0; apply(((last - x0) * 1.5) / PPS); });
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+    };
+    window.addEventListener("pointermove", move, { passive: false });
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
   };
   const dragSeg = (e: React.PointerEvent, s: Seg, side: "l" | "r") => drag(e, (d) => setSegs((all) => all.map((x) => (x.id === s.id ? trimSeg(s, side, d) : x))));
   const dragAud = (e: React.PointerEvent, a: Aud, side: "l" | "r" | "m") => drag(e, (d) => setAuds((all) => all.map((x) => (x.id === a.id ? trimAud(a, side, d) : x))));
@@ -315,7 +324,7 @@ function Editor() {
     }} />
   );
   const Handle = ({ side, on }: { side: "l" | "r"; on: (e: React.PointerEvent) => void }) => (
-    <span onPointerDown={on} className={cn("absolute inset-y-0 z-10 flex w-3 cursor-ew-resize touch-none items-center justify-center bg-primary-foreground", side === "l" ? "left-0 rounded-l-md" : "right-0 rounded-r-md")}>
+    <span onPointerDown={on} className={cn("absolute inset-y-0 z-10 flex w-5 cursor-ew-resize touch-none items-center justify-center bg-primary-foreground", side === "l" ? "left-0 rounded-l-md" : "right-0 rounded-r-md")}>
       <span className="h-3 w-0.5 rounded bg-background" />
     </span>
   );
@@ -380,7 +389,7 @@ function Editor() {
       </div>
 
       {/* timeline */}
-      <div className="overflow-x-auto border-y border-border bg-surface/50" dir="ltr">
+      <div className="mx-6 overflow-x-auto overscroll-x-contain rounded-xl border border-border bg-surface/50 px-4" dir="ltr">
         <div className="relative select-none" style={{ width }}
           onPointerDown={(e) => { const r = e.currentTarget.getBoundingClientRect(); seek((e.clientX - r.left) / PPS); setSel(null); }}>
           <div className="relative h-6 text-[9px] text-muted-foreground">
