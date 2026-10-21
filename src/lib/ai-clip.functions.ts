@@ -146,7 +146,6 @@ export const analyzeClip = createServerFn({ method: "POST" })
 export type GifResult = { id: string; url: string; preview: string };
 
 export const searchGifs = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .inputValidator((i) => z.object({ keywords: z.array(z.string().max(60)).min(1).max(6) }).parse(i))
   .handler(async ({ data }): Promise<{ gifs: GifResult[]; missingKey?: boolean }> => {
     const key = process.env["GIPHY_API_KEY"];
@@ -159,8 +158,8 @@ export const searchGifs = createServerFn({ method: "POST" })
       qs.map(async (q) => {
         const u = new URL("https://api.giphy.com/v1/gifs/search");
         u.search = new URLSearchParams({ api_key: key, q, limit: per, rating: "pg-13" }).toString();
-        const r = await fetch(u);
-        if (!r.ok) return [];
+        const r = await fetch(u.toString());
+        if (!r.ok) { console.error("giphy", r.status); return []; }
         const j = (await r.json()) as { data?: { id: string; images: Record<string, { url?: string }> }[] };
         return j.data ?? [];
       }),

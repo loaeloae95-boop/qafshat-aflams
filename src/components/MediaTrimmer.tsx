@@ -79,7 +79,7 @@ export function MediaTrimmer({
         </button>
       </div>
 
-      <div className="relative h-8" dir="ltr" onPointerDown={stop}>
+      <div className="relative mx-4 h-10 touch-none" dir="ltr" onPointerDown={stop}>
         <div className="absolute inset-x-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-secondary" />
         <div className="absolute top-1/2 h-2 -translate-y-1/2 rounded-full gradient-violet" style={{ left: `${pct(start)}%`, width: `${pct(end - start)}%` }} />
         <div className="absolute top-1/2 h-4 w-0.5 -translate-y-1/2 bg-accent" style={{ left: `${pct(now)}%` }} />
