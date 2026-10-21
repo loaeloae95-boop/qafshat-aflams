@@ -1,13 +1,13 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Check, Loader2, Music, Scissors, Search, Sparkles, Video } from "lucide-react";
 import { GifPicker } from "@/components/GifPicker";
 import { AppShell } from "@/components/AppShell";
 import { SignInPrompt } from "@/components/SignInPrompt";
-import { MediaTrimmer } from "@/components/MediaTrimmer";
+import { TimelineEditor, type TimelineEditorHandle } from "@/components/TimelineEditor";
 import { useSession } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { CLIP_CATEGORIES } from "@/lib/clips";
@@ -51,7 +51,7 @@ function Studio() {
   const findGifs = useServerFn(searchGifs);
   const [type, setType] = useState<"video" | "audio">("video");
   const [file, setFile] = useState<File | null>(null);
-  const [range, setRange] = useState<[number, number]>([0, 0]);
+  const editorRef = useRef<TimelineEditorHandle>(null);
   const [duration, setDuration] = useState(0);
   const [cover, setCover] = useState<File | null>(null);
   const [gifMode, setGifMode] = useState<"file" | "link">("file");
@@ -140,7 +140,6 @@ function Studio() {
   const pickFile = (f: File | null) => {
     setFile(f);
     setDuration(0);
-    setRange([0, 0]);
     setAi("idle");
     setSugg(null);
     setGifs([]);
@@ -166,28 +165,32 @@ function Studio() {
       return;
     }
     try {
-      let final = file;
+      let finalPayload: Blob = file;
       let len: number | null = duration || null;
-      const start = range[0];
-      const end = Math.min(range[1] || duration, start + MAX_SECONDS);
-      const trimmed = duration > 0 && (start > 0.05 || end < duration - 0.05);
-      if (trimmed) {
-        setBusy("جارٍ القص...");
-        try {
-          const { trimMedia } = await import("@/lib/media-tools");
-          final = await trimMedia(file, start, end);
-          len = end - start;
-        } catch (err) {
-          console.error("trim failed", err);
-          if (duration > MAX_SECONDS + 0.5) {
-            toast.error(`تعذّر القص — الحد الأقصى ${MAX_SECONDS} ثانية`);
-            return;
-          }
-          final = file;
+      let ext =
+        (file.name.split(".").pop() || (type === "video" ? "mp4" : "mp3"))
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, "") || "bin";
+
+      if (editorRef.current?.isDirty()) {
+        setBusy("جارٍ تجهيز وتصدير المقطع...");
+        const rendered = await editorRef.current.renderBlob();
+        if (rendered) {
+          finalPayload = rendered.blob;
+          len = rendered.duration;
+          ext = rendered.ext;
         }
       }
-      setBusy("جارٍ الرفع...");
-      const mediaPath = await upload(final, type);
+
+      setBusy("جارٍ الرفع إلى السيرفر...");
+      const mediaPath = `${user.id}/${type}-${crypto.randomUUID()}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("media")
+        .upload(mediaPath, finalPayload, {
+          contentType: finalPayload.type || (type === "video" ? "video/mp4" : "audio/mpeg"),
+          upsert: false,
+        });
+      if (uploadError) throw new Error(`فشل رفع الملف: ${uploadError.message}`);
       const coverPath = type === "video" && cover ? await upload(cover, "cover") : null;
       let gif: string | null = null;
       if (type === "audio")
@@ -283,23 +286,13 @@ function Studio() {
                 {file.name} ({(file.size / (1024 * 1024)).toFixed(1)} MB)
               </span>
             </div>
-            <MediaTrimmer
+            <TimelineEditor
+              ref={editorRef}
               file={file}
               type={type}
               gifUrl={gifPreview}
-              range={range}
-              onRange={(r) => setRange(r[1] - r[0] > MAX_SECONDS ? [r[0], r[0] + MAX_SECONDS] : r)}
-              onDuration={(d) => {
-                setDuration(d);
-                setRange([0, Math.min(d, MAX_SECONDS)]);
-                if (d > MAX_SECONDS) toast.info(`سيتم قص القفشة تلقائيًا إلى ${MAX_SECONDS} ثانية`);
-              }}
+              onDurationChange={(d) => setDuration(d)}
             />
-            {duration > MAX_SECONDS && (
-              <p className="text-xs text-muted-foreground">
-                الحد الأقصى {MAX_SECONDS} ثانية — حرّك المقبض لاختيار الجزء المطلوب.
-              </p>
-            )}
           </div>
         )}
 
