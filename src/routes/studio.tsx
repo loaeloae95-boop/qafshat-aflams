@@ -3,7 +3,17 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Check, Loader2, Music, Scissors, Search, Sparkles, Video } from "lucide-react";
+import {
+  AlertCircle,
+  Check,
+  Loader2,
+  Music,
+  RotateCcw,
+  Scissors,
+  Search,
+  Sparkles,
+  Video,
+} from "lucide-react";
 import { GifPicker } from "@/components/GifPicker";
 import { AppShell } from "@/components/AppShell";
 import { SignInPrompt } from "@/components/SignInPrompt";
@@ -41,7 +51,7 @@ export const Route = createFileRoute("/studio")({
 
 const MAX_SECONDS = 60;
 
-type AiState = "idle" | "working" | "done" | "error";
+type AiState = "idle" | "working" | "done" | "unrecognized" | "error";
 
 function Studio() {
   const { user, loading } = useSession();
@@ -78,13 +88,15 @@ function Studio() {
   );
   const gifPreview = gifMode === "file" ? gifFileUrl : gifLink || null;
 
+  const [aiRetryKey, setAiRetryKey] = useState(0);
+
   // Automatic background AI discovery once the media duration is known.
   useEffect(() => {
     if (!file || !duration || !user) return;
     let cancelled = false;
     (async () => {
       setAi("working");
-      setAiMsg("نستخرج الصوت...");
+      setAiMsg("نستخرج الصوت من المقطع...");
       setSugg(null);
       setGifs([]);
       setGifNote("");
@@ -92,14 +104,22 @@ function Studio() {
         const { extractSpeech, blobToBase64 } = await import("@/lib/media-tools");
         const speech = await extractSpeech(file, 0, Math.min(duration, MAX_SECONDS));
         if (cancelled) return;
-        setAiMsg("نسمع القفشة ونتعرّف عليها...");
+        setAiMsg("يستمع الذكاء الاصطناعي للقفشة ويتعرف على المشهد والنجوم...");
         const res = await analyze({ data: { audio: await blobToBase64(speech) } });
         if (cancelled) return;
         setSugg(res);
-        setTitle((t) => t || res.title);
-        setAuthor((a) => a || res.actor);
-        setSource((s) => s || res.source);
-        setAi("done");
+        const hasDetails = Boolean(res.title || res.actor || res.source);
+        if (hasDetails) {
+          setTitle((t) => t || res.title);
+          setAuthor((a) => a || res.actor);
+          setSource((s) => s || res.source);
+          setAi("done");
+          toast.success("اقترح الذكاء الاصطناعي تفاصيل القفشة ✨");
+        } else if (res.transcript) {
+          setAi("done");
+        } else {
+          setAi("unrecognized");
+        }
         if (type === "audio" && res.gifKeywords.length) {
           const g = await findGifs({ data: { keywords: res.gifKeywords } });
           if (cancelled) return;
@@ -110,14 +130,14 @@ function Studio() {
       } catch (err) {
         if (cancelled) return;
         console.error("AI analyze failed", err);
-        setAi("idle");
+        setAi("error");
       }
     })();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [file, duration, user?.id]);
+  }, [file, duration, user?.id, aiRetryKey]);
 
   if (!loading && !user)
     return (
@@ -299,20 +319,46 @@ function Studio() {
         {ai !== "idle" && (
           <div
             className={cn(
-              "flex items-center gap-2 rounded-2xl p-3 text-xs",
-              ai === "error" ? "bg-destructive/20" : "gradient-indigo",
+              "flex flex-wrap items-center justify-between gap-2 rounded-2xl p-3 text-xs transition-all",
+              ai === "error"
+                ? "border border-destructive/30 bg-destructive/15 text-destructive-foreground"
+                : ai === "unrecognized"
+                  ? "border border-amber-500/30 bg-amber-500/15 text-amber-200"
+                  : "gradient-indigo text-white shadow-glow",
             )}
           >
-            {ai === "working" ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : ai === "done" ? (
-              <Sparkles className="size-4" />
-            ) : null}
-            <span className="flex-1">
-              {ai === "done"
-                ? "اقترح الذكاء الاصطناعي الاسم والممثل والعمل — عدّلها كما تريد."
-                : aiMsg}
-            </span>
+            <div className="flex items-center gap-2">
+              {ai === "working" ? (
+                <Loader2 className="size-4 animate-spin text-primary" />
+              ) : ai === "done" ? (
+                <Sparkles className="size-4 text-accent" />
+              ) : (
+                <AlertCircle className="size-4 text-amber-300" />
+              )}
+              <span className="font-semibold">
+                {ai === "working" && aiMsg}
+                {ai === "done" &&
+                  (sugg?.title || sugg?.actor || sugg?.source
+                    ? "اقترح الذكاء الاصطناعي الاسم والممثل والعمل — عدّلها كما تريد."
+                    : sugg?.transcript
+                      ? "تم استخراج النص المسموع — يمكنك إدخال اسم القفشة والممثل يدوياً."
+                      : "لم نتمكن من التعرّف على تفاصيل المقطع تلقائياً — يرجى كتابة البيانات يدوياً.")}
+                {ai === "unrecognized" &&
+                  "لم يتم التعرف على المشهد تلقائياً — يرجى كتابة اسم القفشة والممثل يدوياً."}
+                {ai === "error" &&
+                  "تعذر إكمال التحليل بالذكاء الاصطناعي — يمكنك إدخال البيانات يدوياً."}
+              </span>
+            </div>
+            {ai !== "working" && (
+              <button
+                type="button"
+                onClick={() => setAiRetryKey((k) => k + 1)}
+                className="inline-flex items-center gap-1 rounded-xl bg-white/10 px-2.5 py-1 text-[11px] font-bold text-white transition hover:bg-white/20 active:scale-95"
+              >
+                <RotateCcw className="size-3" />
+                إعادة المحاولة
+              </button>
+            )}
           </div>
         )}
         {sugg?.transcript && (

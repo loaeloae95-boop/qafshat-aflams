@@ -32,7 +32,7 @@ function AuthPage() {
     setBusy(true);
     try {
       if (mode === "signup") {
-        const { data, error } = await supabase.auth.signUp({
+        const { error } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -41,29 +41,37 @@ function AuthPage() {
           },
         });
         if (error) throw error;
-        if (!data.session) {
-          toast.success("أرسلنا رابط تأكيد لبريدك — أكّده ثم سجّل الدخول");
-          setMode("signin");
-          return;
-        }
+        toast.success("تم إنشاء الحساب بنجاح 🎉");
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        toast.success("تم تسجيل الدخول بنجاح 🎉");
       }
       await navigate({ to: "/" });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "حدث خطأ");
+      toast.error(err instanceof Error ? err.message : "حدث خطأ أثناء تسجيل الدخول");
     } finally {
       setBusy(false);
     }
   };
 
   const google = async () => {
-    const r = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin,
-    });
-    if (r.error) toast.error("تعذر الدخول عبر Google");
-    else if (!r.redirected) navigate({ to: "/" });
+    setBusy(true);
+    try {
+      const r = await lovable.auth.signInWithOAuth("google", {
+        redirect_uri: window.location.origin,
+      });
+      if (r.error) {
+        toast.error("تعذر الدخول عبر Google");
+      } else {
+        toast.success("تم تسجيل الدخول عبر Google بنجاح 🎉");
+        await navigate({ to: "/" });
+      }
+    } catch {
+      toast.error("تعذر الدخول عبر Google");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
