@@ -1,8 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { GoogleGenAI, Type } from "@google/genai";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-
-const GATEWAY = "https://ai.gateway.lovable.dev/v1";
 
 export type ClipSuggestion = {
   transcript: string;
@@ -12,141 +11,9 @@ export type ClipSuggestion = {
   gifKeywords: string[];
 };
 
-class GatewayError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-  ) {
-    super(message);
-  }
-}
-
-async function gatewayFail(res: Response, what: string): Promise<never> {
-  let msg = "";
-  try {
-    const j = await res.json();
-    msg = j?.error?.message || j?.message || "";
-  } catch {
-    /* ignore */
-  }
-  if (res.status === 402) msg ||= "رصيد الذكاء الاصطناعي نفد";
-  if (res.status === 429) msg ||= "طلبات كثيرة، حاول بعد قليل";
-  throw new GatewayError(res.status, `${what}: ${msg || res.status}`);
-}
-
-async function transcribe(key: string, audioB64: string): Promise<string> {
-  const bytes = Uint8Array.from(atob(audioB64), (c) => c.charCodeAt(0));
-  const form = new FormData();
-  form.append("file", new Blob([bytes], { type: "audio/mpeg" }), "speech.mp3");
-  form.append("model", "openai/gpt-transcribe");
-  form.append("languages", "ar");
-  form.append("stream", "true");
-  const res = await fetch(`${GATEWAY}/audio/transcriptions`, {
-    method: "POST",
-    headers: { "Lovable-API-Key": key, "X-Lovable-AIG-SDK": "fetch" },
-    body: form,
-  });
-  if (!res.ok) await gatewayFail(res, "فشل تفريغ الصوت");
-  return readSse(res, (ev) => {
-    if (ev.type === "transcript.text.delta") return { delta: String(ev.delta ?? "") };
-    if (ev.type === "transcript.text.done") return { done: String(ev.text ?? "") };
-    return null;
-  });
-}
-
-async function readSse(
-  res: Response,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  pick: (ev: any) => { delta?: string; done?: string } | null,
-): Promise<string> {
-  const reader = res.body!.getReader();
-  const dec = new TextDecoder();
-  let buf = "";
-  let out = "";
-  let final: string | null = null;
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buf += dec.decode(value, { stream: true });
-    let i;
-    while ((i = buf.indexOf("\n")) >= 0) {
-      const line = buf.slice(0, i).trim();
-      buf = buf.slice(i + 1);
-      if (!line.startsWith("data:")) continue;
-      const payload = line.slice(5).trim();
-      if (!payload || payload === "[DONE]") continue;
-      try {
-        const ev = JSON.parse(payload);
-        if (ev.type === "error" || ev.type === "response.failed")
-          throw new GatewayError(500, ev?.error?.message || "AI error");
-        const p = pick(ev);
-        if (p?.delta) out += p.delta;
-        if (p?.done != null) final = p.done;
-      } catch (e) {
-        if (e instanceof GatewayError) throw e;
-      }
-    }
-  }
-  return final ?? out;
-}
-
-const SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  required: ["title", "actor", "source", "gif_keywords"],
-  properties: {
-    title: { type: "string", description: "عنوان قصير جذاب للقفشة بالعربية، مثل: قفشة بوحة" },
-    actor: { type: "string", description: "اسم الممثل الأرجح بالعربية، أو فارغ إن لم يُعرف" },
-    source: {
-      type: "string",
-      description: "اسم الفيلم/المسرحية/المسلسل مع نوعه، مثل: فيلم بوحة، أو فارغ",
-    },
-    gif_keywords: {
-      type: "array",
-      items: { type: "string" },
-      description: "3-6 English emotion/semantic GIF search keywords",
-    },
-  },
-};
-
-async function analyze(key: string, transcript: string) {
-  const res = await fetch(`${GATEWAY}/responses`, {
-    method: "POST",
-    headers: {
-      "Lovable-API-Key": key,
-      "X-Lovable-AIG-SDK": "fetch",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "openai/gpt-6-astra",
-      stream: true,
-      store: false,
-      reasoning: { effort: "low" },
-      instructions:
-        "أنت خبير في السينما والمسرح العربي، خاصة المصري. ستتلقى نصاً مفرّغاً من مقطع صوتي/فيديو قصير (قفشة). " +
-        "تعرّف على المشهد الأشهر المطابق إن أمكن، واقترح عنواناً قصيراً، واسم الممثل، واسم العمل الأصلي. " +
-        "لا تختلق إن لم تكن متأكداً: اترك الحقل فارغاً. كلمات GIF تكون بالإنجليزية وتعبّر عن المشاعر والسياق (مثل Sarcastic, Angry Laugh) ويمكن إضافة اسم الممثل بالإنجليزية.",
-      input: [{ role: "user", content: `النص المفرّغ:\n${transcript || "(لا يوجد كلام واضح)"}` }],
-      text: { format: { type: "json_schema", name: "clip_meta", strict: true, schema: SCHEMA } },
-    }),
-  });
-  if (!res.ok) await gatewayFail(res, "فشل التحليل");
-  const text = await readSse(res, (ev) => {
-    if (ev.type === "response.output_text.delta") return { delta: String(ev.delta ?? "") };
-    return null;
-  });
-  const j = JSON.parse(text) as {
-    title: string;
-    actor: string;
-    source: string;
-    gif_keywords: string[];
-  };
-  return j;
-}
-
 export const analyzeClip = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((i) => z.object({ audio: z.string().min(10).max(6_000_000) }).parse(i))
+  .inputValidator((i) => z.object({ audio: z.string().min(10).max(10_000_000) }).parse(i))
   .handler(async ({ data }): Promise<ClipSuggestion> => {
     const empty: ClipSuggestion = {
       transcript: "",
@@ -155,23 +22,94 @@ export const analyzeClip = createServerFn({ method: "POST" })
       source: "",
       gifKeywords: [],
     };
-    const key = process.env["LOVABLE_API_KEY"];
-    if (!key) {
-      console.error("analyzeClip: AI key not configured");
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      console.warn("analyzeClip: GEMINI_API_KEY is not defined in environment");
       return empty;
     }
+
     try {
-      const transcript = (await transcribe(key, data.audio)).trim();
-      const meta = await analyze(key, transcript);
-      return {
-        transcript,
-        title: meta.title ?? "",
-        actor: meta.actor ?? "",
-        source: meta.source ?? "",
-        gifKeywords: (meta.gif_keywords ?? []).slice(0, 6),
+      const ai = new GoogleGenAI();
+      const response = await ai.models.generateContent({
+        model: "gemini-3.8-flash",
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                inlineData: {
+                  mimeType: "audio/mp3",
+                  data: data.audio,
+                },
+              },
+              {
+                text: `أنت خبير أرشيفي متخصص وبارع في السينما والمسرح والتلفزيون العربي، وخاصة القفشات المصرية والكوميدية الأيقونية.
+المطلوب منك بدقة:
+1. استمع إلى المقطع الصوتي واكتب تفريغاً دقيقاً (transcript) للكلام المنطوق باللهجة الأصلية (مثل العامية المصرية).
+2. تعرّف على المشهد الأصلي للقفشة، الممثل أو النجم الذي قالها، والعمل الفني الأصلي (فيلم، مسرحية، أو مسلسل).
+3. استخرج البيانات التالية باللغة العربية:
+   - title: عنوان أو اسم مشهور ومميز للقفشة (مثل: "يا عم إحنا بتوع ربنا"، "أنا مش قصير أنا أوزعة"، "قفشة بوحة"، "سلام يا صاحبي").
+   - actor: اسم الممثل أو النجم العربي (مثل: عادل إمام، محمد سعد، أحمد حلمي، سعيد صالح، علاء ولي الدين، سمير غانم، أحمد مكي) أو فارغ إذا لم يُعرف.
+   - source: اسم العمل مع تصنيفه (مثل: "فيلم بوحة"، "مسرحية مدرسة المشاغبين"، "فيلم الناظر"، "مسلسل الكبير أوي") أو فارغ إذا لم يُعرف.
+   - gifKeywords: قائمة من 3 إلى 6 كلمات مفتاحية بالإنجليزية مناسبة للبحث عن صور متحركة معبرة عن المشهد ومشاعر القفشة (مثال: ["funny", "laughing", "egyptian comedy"]).
+إذا لم يكن هناك كلام واضح في المقطع أو لم تتعرف على العمل، اترك الحقول النصية فارغة "".`,
+              },
+            ],
+          },
+        ],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              transcript: {
+                type: Type.STRING,
+                description: "تفريغ الكلام العربي المنطوق بدقة",
+              },
+              title: {
+                type: Type.STRING,
+                description: "عنوان مشهور وجذاب للقفشة بالعربية",
+              },
+              actor: {
+                type: Type.STRING,
+                description: "اسم الممثل أو صاحب القفشة بالعربية",
+              },
+              source: {
+                type: Type.STRING,
+                description: "اسم الفيلم أو المسرحية أو المسلسل بالعربية",
+              },
+              gifKeywords: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING },
+                description: "3-6 English keywords for searching expressive GIFs",
+              },
+            },
+            required: ["transcript", "title", "actor", "source", "gifKeywords"],
+          },
+        },
+      });
+
+      const text = response.text?.trim() ?? "";
+      if (!text) return empty;
+
+      const parsed = JSON.parse(text) as {
+        transcript?: string;
+        title?: string;
+        actor?: string;
+        source?: string;
+        gifKeywords?: string[];
       };
-    } catch (e) {
-      console.error("analyzeClip failed", e);
+
+      return {
+        transcript: parsed.transcript?.trim() ?? "",
+        title: parsed.title?.trim() ?? "",
+        actor: parsed.actor?.trim() ?? "",
+        source: parsed.source?.trim() ?? "",
+        gifKeywords: Array.isArray(parsed.gifKeywords) ? parsed.gifKeywords.slice(0, 6) : [],
+      };
+    } catch (err) {
+      console.error("Gemini analyzeClip error:", err);
       return empty;
     }
   });
