@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { Maximize2, Pause, Play, Share2, X } from "lucide-react";
 import { shareClip, type Clip } from "@/lib/clips";
 import { ClipVisual } from "./ClipVisual";
+import { VerticalActionSidebar } from "./VerticalActionSidebar";
 
 type PlayerCtx = {
   mini: Clip | null;
@@ -156,13 +157,89 @@ function ReelsViewer({
 
 function ReelItem({ clip, active }: { clip: Clip; active: boolean }) {
   const ref = useRef<HTMLMediaElement | null>(null);
+  const bgVideoRef = useRef<HTMLVideoElement | null>(null);
   const [playing, setPlaying] = useState(false);
+  const [bgMode, setBgMode] = useState<"blurred" | "transparent">(() => {
+    if (typeof window !== "undefined") {
+      return (
+        (localStorage.getItem("qafsha_player_bg_mode") as "blurred" | "transparent") || "blurred"
+      );
+    }
+    return "blurred";
+  });
+
+  const toggleBgMode = () => {
+    const next = bgMode === "blurred" ? "transparent" : "blurred";
+    setBgMode(next);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("qafsha_player_bg_mode", next);
+    }
+  };
+
+  // Keep background ambient video in exact sync with primary video
+  useEffect(() => {
+    const primary = ref.current;
+    const ambient = bgVideoRef.current;
+    if (!primary || !ambient || clip.mediaType !== "video") return;
+
+    const onPlay = () => void ambient.play().catch(() => {});
+    const onPause = () => ambient.pause();
+    const onTimeUpdate = () => {
+      if (Math.abs(ambient.currentTime - primary.currentTime) > 0.25) {
+        ambient.currentTime = primary.currentTime;
+      }
+    };
+
+    primary.addEventListener("play", onPlay);
+    primary.addEventListener("pause", onPause);
+    primary.addEventListener("timeupdate", onTimeUpdate);
+
+    return () => {
+      primary.removeEventListener("play", onPlay);
+      primary.removeEventListener("pause", onPause);
+      primary.removeEventListener("timeupdate", onTimeUpdate);
+    };
+  }, [clip.mediaType]);
+
+  const thumb =
+    clip.mediaType === "audio" ? (clip.gifUrl ?? clip.coverUrl) : (clip.coverUrl ?? clip.gifUrl);
+
   return (
     <section
-      className={`relative mx-auto h-full w-full max-w-md snap-start snap-always overflow-hidden ${clip.gradient}`}
+      className={`relative mx-auto h-full w-full max-w-md snap-start snap-always overflow-hidden ${
+        bgMode === "transparent" ? "bg-black/80 backdrop-blur-md" : "bg-black"
+      }`}
     >
+      {/* 2. Blurred Video Ambient Reflection (Background Option) */}
+      {bgMode === "blurred" && (
+        <div className="pointer-events-none absolute inset-0 overflow-hidden z-0 select-none">
+          {clip.mediaType === "video" ? (
+            <video
+              ref={bgVideoRef}
+              src={clip.mediaUrl}
+              muted
+              playsInline
+              loop
+              aria-hidden
+              className="absolute inset-0 h-full w-full object-cover scale-125 filter blur-[25px] brightness-[0.65] saturate-[1.4] opacity-85 transition-opacity duration-500"
+            />
+          ) : thumb ? (
+            <img
+              src={thumb}
+              alt=""
+              aria-hidden
+              className="absolute inset-0 h-full w-full object-cover scale-125 filter blur-[25px] brightness-[0.65] saturate-[1.4] opacity-85 transition-opacity duration-500"
+            />
+          ) : (
+            <div className={`absolute inset-0 ${clip.gradient} opacity-50 filter blur-[25px]`} />
+          )}
+          <div className="absolute inset-0 bg-black/25" />
+        </div>
+      )}
+
+      {/* Primary Media Display */}
       <div
-        className="absolute inset-0"
+        className="relative z-10 size-full cursor-pointer"
         onClick={() => (playing ? ref.current?.pause() : ref.current?.play())}
       >
         <ClipVisual
@@ -175,24 +252,35 @@ function ReelItem({ clip, active }: { clip: Clip; active: boolean }) {
           fit="contain"
         />
       </div>
+
+      {/* Play/Pause Center Indicator */}
       {!playing && (
-        <div className="pointer-events-none absolute inset-0 grid place-items-center">
-          <Play className="size-16 opacity-80" />
+        <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center">
+          <div className="rounded-full bg-black/40 p-4 backdrop-blur-sm">
+            <Play className="size-14 text-white opacity-90 fill-white/20" />
+          </div>
         </div>
       )}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-background/90 to-transparent p-5 pb-8">
-        <p className="font-display text-lg font-extrabold">{clip.title}</p>
-        <p className="text-sm text-muted-foreground">
+
+      {/* 3. Vertical Action Sidebar (TikTok Style: Reaction with Clown Logo, Bookmark, Share Count, Background Toggle) */}
+      <VerticalActionSidebar
+        clip={clip}
+        clipId={clip.id}
+        clipTitle={clip.title}
+        clipAuthor={clip.author ?? undefined}
+        clipSource={clip.source ?? undefined}
+        bgMode={bgMode}
+        onToggleBgMode={toggleBgMode}
+        className="z-30 bottom-24 right-3"
+      />
+
+      {/* Bottom Info Overlay */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/95 via-black/50 to-transparent p-5 pb-8">
+        <p className="font-display text-lg font-extrabold text-white drop-shadow">{clip.title}</p>
+        <p className="text-sm text-white/80 drop-shadow">
           {[clip.author, clip.source, clip.category].filter(Boolean).join(" · ")}
         </p>
       </div>
-      <button
-        aria-label="مشاركة"
-        onClick={() => shareClip(clip)}
-        className="glass-panel absolute bottom-24 left-4 rounded-full p-3"
-      >
-        <Share2 className="size-5" />
-      </button>
     </section>
   );
 }

@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import {
   ArrowRight,
   Download,
+  Droplet,
   Film,
   Image as ImageIcon,
   Layers,
@@ -22,6 +23,8 @@ import {
   X,
 } from "lucide-react";
 import { GifPicker } from "@/components/GifPicker";
+import { VideoThumbnailsFilmstrip } from "@/components/VideoThumbnailsFilmstrip";
+import { VerticalActionSidebar } from "@/components/VerticalActionSidebar";
 import { useSession } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { ensureUuid, insertLocalClip, storeLocalBlob } from "@/lib/local-storage-db";
@@ -94,8 +97,19 @@ function Editor() {
   const [draft, setDraft] = useState("");
   const [exporting, setExporting] = useState(0);
   const [out, setOut] = useState<{ url: string; blob: Blob; ext: string } | null>(null);
+  const [bgMode, setBgMode] = useState<"blurred" | "transparent">(() => {
+    if (typeof window !== "undefined") {
+      return (
+        (localStorage.getItem("qafsha_editor_bg_mode") as "blurred" | "transparent") || "blurred"
+      );
+    }
+    return "blurred";
+  });
+  const bgModeRef = useRef(bgMode);
+  bgModeRef.current = bgMode;
 
   const canvas = useRef<HTMLCanvasElement>(null);
+  const blurCanvas = useRef<HTMLCanvasElement>(null);
   const els = useRef(new Map<string, HTMLMediaElement>());
   const imgs = useRef(new Map<string, HTMLImageElement>());
   const gains = useRef(new Map<HTMLMediaElement, GainNode>());
@@ -243,6 +257,11 @@ function Editor() {
         g.fillStyle = x.color;
         g.fillText(x.text, W / 2, x.y * H);
       }
+      const bcv = blurCanvas.current;
+      if (bcv && bgModeRef.current === "blurred") {
+        const bg = bcv.getContext("2d");
+        if (bg) bg.drawImage(cv, 0, 0, bcv.width, bcv.height);
+      }
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
@@ -318,9 +337,27 @@ function Editor() {
 
   // ---------- edit ops ----------
   const split = () => {
-    if (sel?.kind === "aud") setAuds((a) => splitAud(a, sel.id, t));
-    else setSegs((s) => splitSegs(s, t));
+    pause();
+    if (sel?.kind === "aud") {
+      setAuds((a) => splitAud(a, sel.id, t));
+      toast.success("تم اقتصاص الصوت بنجاح ✂️");
+      return;
+    }
+
+    const targetSeg = sel?.kind === "seg" ? segs.find((x) => x.id === sel.id) : segAt(segs, t)?.seg;
+    if (targetSeg) {
+      setSegs((all) => {
+        const next = splitSegs(all, t);
+        const hit = segAt(next, Math.min(totalRef.current, t + 0.05));
+        if (hit) setSel({ kind: "seg", id: hit.seg.id });
+        return next;
+      });
+      toast.success("تم اقتصاص المقطع إلى جزأين بنجاح ✂️");
+    } else {
+      toast.info("حرّك المؤشر الأبيض إلى داخل المقطع للاقتصاص");
+    }
   };
+
   const remove = () => {
     if (!sel) return;
     if (sel.kind === "seg") setSegs((s) => s.filter((x) => x.id !== sel.id));
@@ -328,30 +365,51 @@ function Editor() {
     if (sel.kind === "txt") setTxts((s) => s.filter((x) => x.id !== sel.id));
     if (sel.kind === "stk") setStks((s) => s.filter((x) => x.id !== sel.id));
     setSel(null);
+    toast.info("تم حذف الجزء المحدد 🗑️");
   };
 
   const drag = (e: React.PointerEvent, apply: (dSec: number) => void) => {
     e.stopPropagation();
     e.preventDefault();
     pause();
+
+    const targetEl = e.currentTarget as HTMLElement;
+    const pointerId = e.pointerId;
+    try {
+      targetEl.setPointerCapture?.(pointerId);
+    } catch {
+      // ignore capture errors on non-supported browsers
+    }
+
     const x0 = e.clientX;
-    let raf = 0,
-      last = x0;
-    // Listen on window: the handle re-renders while dragging, so element listeners get lost.
+    let rafId = 0,
+      lastX = x0;
+
     const move = (ev: PointerEvent) => {
       ev.preventDefault();
-      last = ev.clientX;
-      if (!raf)
-        raf = requestAnimationFrame(() => {
-          raf = 0;
-          apply(((last - x0) * 1.5) / PPS);
+      lastX = ev.clientX;
+      if (!rafId)
+        rafId = requestAnimationFrame(() => {
+          rafId = 0;
+          apply(((lastX - x0) * 1.5) / PPS);
         });
     };
+
     const up = () => {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = 0;
+      }
+      try {
+        targetEl.releasePointerCapture?.(pointerId);
+      } catch {
+        // ignore release errors
+      }
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", up);
     };
+
     window.addEventListener("pointermove", move, { passive: false });
     window.addEventListener("pointerup", up);
     window.addEventListener("pointercancel", up);
@@ -489,11 +547,11 @@ function Editor() {
     <span
       onPointerDown={on}
       className={cn(
-        "absolute inset-y-0 z-10 flex w-5 cursor-ew-resize touch-none items-center justify-center bg-primary-foreground",
+        "absolute inset-y-0 z-30 flex w-4 sm:w-5 cursor-ew-resize touch-none items-center justify-center bg-white shadow-xl transition-transform active:scale-110",
         side === "l" ? "left-0 rounded-l-md" : "right-0 rounded-r-md",
       )}
     >
-      <span className="h-3 w-0.5 rounded bg-background" />
+      <span className="h-5 w-1 rounded-full bg-black/70" />
     </span>
   );
   const Block = ({
@@ -502,6 +560,7 @@ function Editor() {
     w,
     cls,
     label,
+    children,
     onSel,
     onL,
     onR,
@@ -510,8 +569,9 @@ function Editor() {
     active: boolean;
     left: number;
     w: number;
-    cls: string;
-    label: React.ReactNode;
+    cls?: string;
+    label?: React.ReactNode;
+    children?: React.ReactNode;
     onSel: () => void;
     onL: (e: React.PointerEvent) => void;
     onR: (e: React.PointerEvent) => void;
@@ -525,12 +585,17 @@ function Editor() {
       onPointerDown={active && onM ? onM : undefined}
       style={{ left, width: Math.max(w, 8) }}
       className={cn(
-        "absolute inset-y-1 overflow-hidden rounded-md px-3 text-[10px] font-bold leading-[2.6rem] transition-shadow touch-none",
+        "absolute inset-y-1 overflow-hidden rounded-lg transition-shadow touch-none select-none",
         cls,
-        active && "ring-2 ring-primary-foreground shadow-glow",
+        active && "ring-2 ring-white border-2 border-white shadow-glow z-10",
       )}
     >
-      <span className="pointer-events-none truncate">{label}</span>
+      {children}
+      {label && (
+        <span className="pointer-events-none absolute inset-x-2 bottom-1 z-10 truncate rounded bg-black/75 px-1.5 py-0.5 text-[9px] font-extrabold text-white backdrop-blur-sm shadow inline-block max-w-fit">
+          {label}
+        </span>
+      )}
       {active && (
         <>
           <Handle side="l" on={onL} />
@@ -568,44 +633,110 @@ function Editor() {
         </button>
       </header>
 
-      {/* preview */}
+      {/* 2. preview with Blurred Ambient Reflection or Transparent Background */}
       <div className="flex min-h-0 flex-1 items-center justify-center px-4">
-        <div className="relative h-full max-h-full" style={{ aspectRatio: "9 / 16" }}>
+        <div
+          className={cn(
+            "relative h-full max-h-full rounded-2xl overflow-hidden transition-all duration-300",
+            bgMode === "transparent"
+              ? "bg-black/40 backdrop-blur-md border border-white/10"
+              : "bg-black",
+          )}
+          style={{ aspectRatio: "9 / 16" }}
+        >
+          {/* Ambient blurred canvas */}
+          {bgMode === "blurred" && (
+            <div className="pointer-events-none absolute inset-0 overflow-hidden z-0 select-none">
+              <canvas
+                ref={blurCanvas}
+                width={W / 4}
+                height={H / 4}
+                className="absolute inset-0 size-full object-cover scale-125 filter blur-[25px] brightness-[0.65] saturate-[1.4] opacity-85 transition-opacity"
+              />
+              <div className="absolute inset-0 bg-black/20" />
+            </div>
+          )}
+
+          {/* Primary Canvas */}
           <canvas
             ref={canvas}
             width={W}
             height={H}
-            className="size-full rounded-2xl bg-black object-contain shadow-glow"
+            className="relative z-10 size-full object-contain shadow-glow cursor-pointer"
             onClick={() => (playing ? pause() : play())}
           />
+
+          {/* Background toggle button */}
+          <button
+            type="button"
+            onClick={() => {
+              const next = bgMode === "blurred" ? "transparent" : "blurred";
+              setBgMode(next);
+              if (typeof window !== "undefined") {
+                localStorage.setItem("qafsha_editor_bg_mode", next);
+              }
+            }}
+            title={
+              bgMode === "blurred"
+                ? "تبديل إلى الخلفية الشفافة"
+                : "تبديل إلى انعكاس الفيديو الضبابي"
+            }
+            className="glass-panel absolute left-2 top-2 z-30 flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold text-white shadow-md active:scale-95"
+          >
+            <Droplet className="size-3 text-primary" />
+            <span>{bgMode === "blurred" ? "انعكاس ضبابي" : "خلفية شفافة"}</span>
+          </button>
+
+          {/* 3. Vertical Action Sidebar */}
+          <VerticalActionSidebar
+            clipTitle="محرر القفشات"
+            clipId="editor-screen-preview"
+            bgMode={bgMode}
+            onToggleBgMode={() => {
+              const next = bgMode === "blurred" ? "transparent" : "blurred";
+              setBgMode(next);
+              if (typeof window !== "undefined") {
+                localStorage.setItem("qafsha_editor_bg_mode", next);
+              }
+            }}
+            className="z-30 bottom-10 right-2"
+          />
+
           {!total && (
-            <div className="absolute inset-0 grid place-items-center p-6 text-center text-xs text-muted-foreground">
+            <div className="absolute inset-0 z-20 grid place-items-center p-6 text-center text-xs text-muted-foreground">
               أضف فيديو أو GIF من الأسفل للبدء
             </div>
           )}
         </div>
       </div>
 
-      {/* transport */}
+      {/* transport with Split Tool */}
       <div className="flex items-center justify-between px-4 py-2 text-xs" dir="ltr">
         <span className="font-bold tabular-nums">
           {tc(t)} / {tc(total)}
         </span>
         <button
           onClick={() => (playing ? pause() : play())}
-          className="rounded-full bg-surface p-2"
+          className="rounded-full bg-surface p-2.5 transition active:scale-95"
         >
           {playing ? <Pause className="size-5" /> : <Play className="size-5" />}
         </button>
-        <div className="flex gap-2">
-          <button onClick={split} title="تقسيم" className="rounded-full bg-surface p-2">
+        <div className="flex items-center gap-1.5">
+          {/* Split Tool Button ("قصاص / اقتصاص") */}
+          <button
+            type="button"
+            onClick={split}
+            title="قصاص (اقتصاص عند المؤشر)"
+            className="flex items-center gap-1.5 rounded-full bg-primary/20 hover:bg-primary/30 border border-primary/50 px-3 py-1.5 text-xs font-bold text-primary active:scale-95 shadow-sm"
+          >
             <Scissors className="size-4" />
+            <span>قصاص</span>
           </button>
           <button
             onClick={remove}
             disabled={!sel}
-            title="حذف"
-            className="rounded-full bg-surface p-2 disabled:opacity-40"
+            title="حذف الجزء"
+            className="rounded-full bg-surface p-2 text-foreground disabled:opacity-40 transition active:scale-95"
           >
             <Trash2 className="size-4" />
           </button>
@@ -637,31 +768,46 @@ function Editor() {
               </span>
             ))}
           </div>
-          <div className="relative h-12">
+
+          {/* 1. Main video track with extracted frame thumbnails filmstrip */}
+          <div className="relative h-14">
             {segs.map((s) => {
               const left = acc * PPS;
+              const segW = segLen(s) * PPS;
               acc += segLen(s);
               return (
                 <Block
                   key={s.id}
                   active={sel?.id === s.id}
                   left={left}
-                  w={segLen(s) * PPS}
-                  cls={s.kind === "gif" ? "gradient-teal" : "gradient-violet"}
+                  w={segW}
+                  cls={s.kind === "gif" ? "gradient-teal" : "bg-black/90 border border-white/20"}
                   label={
                     <>
-                      {s.kind === "gif" ? (
-                        <ImageIcon className="me-1 inline size-3" />
-                      ) : (
-                        <Film className="me-1 inline size-3" />
-                      )}
+                      <span className="font-mono text-emerald-300 me-1">
+                        {segLen(s).toFixed(1)}s
+                      </span>
                       {s.name}
                     </>
                   }
                   onSel={() => setSel({ kind: "seg", id: s.id })}
                   onL={(e) => dragSeg(e, s, "l")}
                   onR={(e) => dragSeg(e, s, "r")}
-                />
+                >
+                  {s.kind === "video" ? (
+                    <VideoThumbnailsFilmstrip
+                      src={s.src}
+                      duration={s.srcDur}
+                      width={segW}
+                      inTime={s.in}
+                      outTime={s.out}
+                    />
+                  ) : (
+                    <div className="flex size-full items-center justify-center">
+                      <ImageIcon className="size-4 text-teal-200" />
+                    </div>
+                  )}
+                </Block>
               );
             })}
             <label
