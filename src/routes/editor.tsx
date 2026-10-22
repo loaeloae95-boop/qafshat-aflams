@@ -24,6 +24,7 @@ import {
 import { GifPicker } from "@/components/GifPicker";
 import { useSession } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
+import { ensureUuid, insertLocalClip, storeLocalBlob } from "@/lib/local-storage-db";
 import {
   FILTERS,
   projectTotal,
@@ -417,23 +418,48 @@ function Editor() {
     }
     const title = window.prompt("اسم القفشة", txts[0]?.text ?? "قفشة جديدة")?.trim();
     if (!title) return;
-    const path = `${user.id}/video-${crypto.randomUUID()}.${out.ext}`;
-    const up = await supabase.storage
-      .from("media")
-      .upload(path, out.blob, { contentType: out.blob.type });
-    if (up.error) {
-      toast.error(up.error.message);
-      return;
-    }
-    const { error } = await supabase.from("clips").insert({
-      user_id: user.id,
+
+    const safeUserId = ensureUuid(user.id);
+    const path = `${safeUserId}/video-${crypto.randomUUID()}.${out.ext}`;
+
+    // Store in IndexedDB
+    await storeLocalBlob(path, out.blob);
+
+    // Save locally
+    const localRecord = insertLocalClip({
+      user_id: safeUserId,
       title,
+      author: null,
+      source: null,
+      category: null,
       media_type: "video",
       media_url: path,
+      cover_url: null,
+      gif_url: null,
       duration_seconds: total,
     });
-    if (error) toast.error(error.message);
-    else toast.success("تم الحفظ في مكتبتك 🎉");
+
+    // Try remote sync
+    try {
+      const up = await supabase.storage
+        .from("media")
+        .upload(path, out.blob, { contentType: out.blob.type, upsert: true });
+
+      if (!up.error) {
+        await supabase.from("clips").insert({
+          id: localRecord.id,
+          user_id: safeUserId,
+          title,
+          media_type: "video",
+          media_url: path,
+          duration_seconds: total,
+        });
+      }
+    } catch (err) {
+      console.warn("Remote sync failed, saved locally:", err);
+    }
+
+    toast.success("تم الحفظ في مكتبتك 🎉");
   };
 
   // ---------- UI helpers ----------

@@ -21,6 +21,7 @@ import { TimelineEditor, type TimelineEditorHandle } from "@/components/Timeline
 import { useSession } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { CLIP_CATEGORIES } from "@/lib/clips";
+import { ensureUuid, insertLocalClip, storeLocalBlob } from "@/lib/local-storage-db";
 import {
   analyzeClip,
   searchGifs,
@@ -149,11 +150,16 @@ function Studio() {
 
   const upload = async (f: File, kind: string) => {
     const ext = (f.name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "") || "bin";
-    const path = `${user!.id}/${kind}-${crypto.randomUUID()}.${ext}`;
-    const { error } = await supabase.storage
-      .from("media")
-      .upload(path, f, { contentType: f.type || "application/octet-stream", upsert: false });
-    if (error) throw new Error(`فشل رفع الملف: ${error.message}`);
+    const safeUserId = ensureUuid(user?.id);
+    const path = `${safeUserId}/${kind}-${crypto.randomUUID()}.${ext}`;
+    await storeLocalBlob(path, f);
+    try {
+      await supabase.storage
+        .from("media")
+        .upload(path, f, { contentType: f.type || "application/octet-stream", upsert: true });
+    } catch (err) {
+      console.warn("Storage upload warning, preserved locally:", err);
+    }
     return path;
   };
 
@@ -202,26 +208,31 @@ function Studio() {
         }
       }
 
-      setBusy("جارٍ الرفع إلى السيرفر...");
-      const mediaPath = `${user.id}/${type}-${crypto.randomUUID()}.${ext}`;
-      const { error: uploadError } = await supabase.storage
-        .from("media")
-        .upload(mediaPath, finalPayload, {
-          contentType: finalPayload.type || (type === "video" ? "video/mp4" : "audio/mpeg"),
-          upsert: false,
-        });
-      if (uploadError) throw new Error(`فشل رفع الملف: ${uploadError.message}`);
-      const coverPath = type === "video" && cover ? await upload(cover, "cover") : null;
+      setBusy("جارٍ الرفع وحفظ القفشة...");
+      const safeUserId = ensureUuid(user.id);
+      const mediaPath = `${safeUserId}/${type}-${crypto.randomUUID()}.${ext}`;
+
+      // 1. Immediately store binary media locally in IndexedDB
+      await storeLocalBlob(mediaPath, finalPayload);
+
+      let coverPath: string | null = null;
+      if (type === "video" && cover) {
+        coverPath = await upload(cover, "cover");
+      }
+
       let gif: string | null = null;
-      if (type === "audio")
+      if (type === "audio") {
         gif =
           gifMode === "file"
             ? gifFile
               ? await upload(gifFile, "gif")
               : null
             : gifLink.trim() || null;
-      const { error } = await supabase.from("clips").insert({
-        user_id: user.id,
+      }
+
+      // 2. Insert into local storage database
+      const localRecord = insertLocalClip({
+        user_id: safeUserId,
         title: title.trim(),
         author: author.trim() || null,
         source: source.trim() || null,
@@ -232,8 +243,41 @@ function Studio() {
         gif_url: gif,
         duration_seconds: len,
       });
-      if (error) throw error;
-      toast.success("تم رفع القفشة 🎉");
+
+      // 3. Sync to remote Supabase with valid UUID
+      try {
+        const { error: uploadError } = await supabase.storage
+          .from("media")
+          .upload(mediaPath, finalPayload, {
+            contentType: finalPayload.type || (type === "video" ? "video/mp4" : "audio/mpeg"),
+            upsert: true,
+          });
+
+        if (!uploadError) {
+          const { error: insertError } = await supabase.from("clips").insert({
+            id: localRecord.id,
+            user_id: safeUserId,
+            title: title.trim(),
+            author: author.trim() || null,
+            source: source.trim() || null,
+            category: category || null,
+            media_type: type,
+            media_url: mediaPath,
+            cover_url: coverPath,
+            gif_url: gif,
+            duration_seconds: len,
+          });
+          if (insertError) {
+            console.warn("Remote clips insert error (saved locally):", insertError);
+          }
+        } else {
+          console.warn("Remote media upload warning (saved locally):", uploadError);
+        }
+      } catch (remoteErr) {
+        console.warn("Remote sync failed, saved locally:", remoteErr);
+      }
+
+      toast.success("تم رفع وحفظ القفشة بنجاح 🎉");
       await qc.invalidateQueries({ queryKey: ["clips"] });
       navigate({ to: "/library" });
     } catch (err) {

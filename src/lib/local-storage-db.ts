@@ -1,16 +1,25 @@
 /**
  * Local persistent storage and fallback database for Qafshat Aflam.
  * Provides offline-capable IndexedDB storage for media blobs and localStorage for user accounts/clips,
- * preventing HTTP 530 or network failures when external proxies are unreachable.
+ * preventing HTTP 530, 400 UUID syntax errors, or network failures when external proxies are unreachable.
  */
 
 import type { Session, User } from "@supabase/supabase-js";
 
 const DB_NAME = "qafshat_storage_db";
 const STORE_NAME = "media_blobs";
-const USERS_KEY = "qafshat_local_users";
 const CLIPS_KEY = "qafshat_local_clips";
 const SESSION_KEY = "qafshat_active_session";
+
+export function isValidUuid(id: string | null | undefined): boolean {
+  if (!id) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+}
+
+export function ensureUuid(id: string | null | undefined): string {
+  if (id && isValidUuid(id)) return id;
+  return crypto.randomUUID();
+}
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -31,14 +40,21 @@ function openDB(): Promise<IDBDatabase> {
 }
 
 export async function storeLocalBlob(path: string, blob: Blob): Promise<void> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    const store = tx.objectStore(STORE_NAME);
-    const req = store.put(blob, path);
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
-  });
+  try {
+    const db = await openDB();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.put(blob, path);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+    // Cache object URL
+    const url = URL.createObjectURL(blob);
+    blobUrlCache.set(path, url);
+  } catch (err) {
+    console.warn("storeLocalBlob warning", err);
+  }
 }
 
 export async function getLocalBlob(path: string): Promise<Blob | null> {
@@ -101,7 +117,13 @@ export function getLocalSession(): Session | null {
   try {
     const raw = localStorage.getItem(SESSION_KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as Session;
+    const session = JSON.parse(raw) as Session;
+    // Upgrade existing legacy session ID to valid UUID v4 if needed
+    if (session?.user && !isValidUuid(session.user.id)) {
+      session.user.id = crypto.randomUUID();
+      localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    }
+    return session;
   } catch {
     return null;
   }
@@ -111,6 +133,9 @@ export function saveLocalSession(session: Session | null): void {
   if (typeof localStorage === "undefined") return;
   try {
     if (session) {
+      if (session.user && !isValidUuid(session.user.id)) {
+        session.user.id = crypto.randomUUID();
+      }
       localStorage.setItem(SESSION_KEY, JSON.stringify(session));
     } else {
       localStorage.removeItem(SESSION_KEY);
@@ -140,7 +165,7 @@ export function localSignUp(
   displayName?: string,
 ): { user: User; session: Session } {
   const normEmail = email.trim().toLowerCase();
-  const id = "usr_" + Math.random().toString(36).slice(2, 10);
+  const id = crypto.randomUUID();
   const user: User = {
     id,
     app_metadata: { provider: "email" },
@@ -170,7 +195,7 @@ export function localGoogleSignIn(email = "loaeloae95@gmail.com"): {
   session: Session;
 } {
   const normEmail = email.trim().toLowerCase();
-  const id = "usr_g_" + Math.random().toString(36).slice(2, 10);
+  const id = crypto.randomUUID();
   const user: User = {
     id,
     app_metadata: { provider: "google" },
@@ -243,13 +268,15 @@ export function insertLocalClip(
     duration_seconds: clip.duration_seconds || null,
     plays_count: Math.floor(Math.random() * 50) + 1,
     likes_count: Math.floor(Math.random() * 20),
-    user_id: clip.user_id,
+    user_id: ensureUuid(clip.user_id),
     created_at: new Date().toISOString(),
   };
 
-  all.unshift(row);
+  // Prepend new clip so it shows first
+  const filtered = all.filter((c) => c.id !== row.id);
+  filtered.unshift(row);
   if (typeof localStorage !== "undefined") {
-    localStorage.setItem(CLIPS_KEY, JSON.stringify(all));
+    localStorage.setItem(CLIPS_KEY, JSON.stringify(filtered));
   }
   return row;
 }

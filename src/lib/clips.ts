@@ -157,10 +157,36 @@ export const DEFAULT_CLIPS: Clip[] = [
   },
 ];
 
+import { deleteLocalClip, getLocalClips, resolveLocalMediaUrl } from "@/lib/local-storage-db";
+
 export function useClips() {
   return useQuery<Clip[]>({
     queryKey: ["clips"],
     queryFn: async () => {
+      // 1. Load locally stored clips
+      const localRows = getLocalClips();
+      const localResolved: Clip[] = await Promise.all(
+        localRows.map(async (r, i) => ({
+          id: r.id,
+          title: r.title,
+          author: r.author,
+          source: r.source,
+          category: r.category,
+          mediaType: r.media_type,
+          mediaUrl: (await resolveLocalMediaUrl(r.media_url)) || "",
+          coverUrl: r.cover_url ? await resolveLocalMediaUrl(r.cover_url) : null,
+          gifUrl: r.gif_url ? await resolveLocalMediaUrl(r.gif_url) : null,
+          duration: fmt(r.duration_seconds),
+          plays: r.plays_count,
+          likes: r.likes_count,
+          userId: r.user_id,
+          gradient: GRADIENTS[i % GRADIENTS.length] ?? "gradient-violet",
+          createdAt: r.created_at,
+        })),
+      );
+
+      // 2. Fetch from remote Supabase if available
+      let remoteClips: Clip[] = [];
       try {
         const { data, error } = await supabase
           .from("clips")
@@ -177,14 +203,18 @@ export function useClips() {
           );
           const signed = new Map<string, string>();
           if (paths.length) {
-            const { data: urls } = await supabase.storage
-              .from("media")
-              .createSignedUrls(paths, 60 * 60 * 24);
-            urls?.forEach((u) => u.path && u.signedUrl && signed.set(u.path, u.signedUrl));
+            try {
+              const { data: urls } = await supabase.storage
+                .from("media")
+                .createSignedUrls(paths, 60 * 60 * 24);
+              urls?.forEach((u) => u.path && u.signedUrl && signed.set(u.path, u.signedUrl));
+            } catch {
+              /* ignore storage sign error */
+            }
           }
           const resolve = (p: string | null) =>
             !p ? null : isExternal(p) ? p : (signed.get(p) ?? null);
-          return rows.map((r, i) => ({
+          remoteClips = rows.map((r, i) => ({
             id: r.id,
             title: r.title,
             author: r.author,
@@ -203,9 +233,29 @@ export function useClips() {
           }));
         }
       } catch (err) {
-        console.warn("[Clips] Could not fetch clips from Supabase, using demo clips", err);
+        console.warn("[Clips] Could not fetch clips from Supabase, using local fallback", err);
       }
-      return DEFAULT_CLIPS;
+
+      // Merge, giving precedence to newly uploaded local clips
+      const seen = new Set<string>();
+      const combined: Clip[] = [];
+
+      for (const c of [...localResolved, ...remoteClips]) {
+        if (!seen.has(c.id)) {
+          seen.add(c.id);
+          combined.push(c);
+        }
+      }
+
+      // Append default clips to ensure rich discovery catalog
+      for (const d of DEFAULT_CLIPS) {
+        if (!seen.has(d.id)) {
+          seen.add(d.id);
+          combined.push(d);
+        }
+      }
+
+      return combined;
     },
   });
 }
@@ -223,8 +273,12 @@ export function useDeleteClip() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("clips").delete().eq("id", id);
-      if (error) throw error;
+      deleteLocalClip(id);
+      try {
+        await supabase.from("clips").delete().eq("id", id);
+      } catch {
+        /* ignore remote error */
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["clips"] });
