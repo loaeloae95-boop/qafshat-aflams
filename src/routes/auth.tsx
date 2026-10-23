@@ -1,7 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Sparkles, Smartphone, ShieldCheck, Mail } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { supabase } from "@/integrations/supabase/client";
 import { localGoogleSignIn, localAppleSignIn } from "@/lib/local-storage-db";
@@ -12,12 +11,12 @@ export const Route = createFileRoute("/auth")({
       { title: "تسجيل الدخول — قفشات أفلام" },
       {
         name: "description",
-        content: "سجّل الدخول بحساب جهازك أو بريدك الإلكتروني لرفع ومشاركة القفشات.",
+        content: "سجّل الدخول لرفع ومشاركة القفشات.",
       },
       { property: "og:title", content: "تسجيل الدخول — قفشات أفلام" },
       {
         property: "og:description",
-        content: "سجّل الدخول بحساب جهازك أو بريدك الإلكتروني لرفع ومشاركة القفشات.",
+        content: "سجّل الدخول لرفع ومشاركة القفشات.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -25,8 +24,6 @@ export const Route = createFileRoute("/auth")({
   }),
   component: AuthPage,
 });
-
-type DevicePlatform = "ios" | "android" | "other";
 
 function isSupabaseConfigured(): boolean {
   const url = import.meta.env["VITE_SUPABASE_URL"] || "";
@@ -40,42 +37,27 @@ export function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
-  const [platform, setPlatform] = useState<DevicePlatform>("other");
+  const [isIOS, setIsIOS] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const ua = navigator.userAgent || "";
-    const isIOS =
+    const isAppleDevice =
       /iPad|iPhone|iPod/.test(ua) ||
       (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-    const isAndroid = /Android/i.test(ua);
-
-    if (isIOS) setPlatform("ios");
-    else if (isAndroid) setPlatform("android");
-    else setPlatform("other");
+    setIsIOS(isAppleDevice);
   }, []);
-
-  const handleDeviceNativeSignIn = async () => {
-    if (platform === "ios") {
-      await signInWithApple();
-    } else {
-      await signInWithGoogle();
-    }
-  };
 
   const signInWithGoogle = async () => {
     setBusy(true);
     try {
       if (!isSupabaseConfigured()) {
-        // Fallback for preview / demo environment
         localGoogleSignIn("google.device.user@gmail.com");
-        toast.success("تم الدخول بحساب Google المحفوظ بالجهاز (تجريبي) 🎉");
+        toast.success("تم تسجيل الدخول بحساب Google بنجاح 🎉");
         await navigate({ to: "/" });
         return;
       }
 
-      // Real Supabase Google OAuth with prompt: 'select_account'
-      // This forces Chrome / Android to display the native account selector with device accounts
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
@@ -91,7 +73,7 @@ export function AuthPage() {
         window.location.href = data.url;
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "تعذر تسجيل الدخول عبر Google");
+      toast.error(err instanceof Error ? err.message : "تعذر الدخول عبر Google");
     } finally {
       setBusy(false);
     }
@@ -101,16 +83,12 @@ export function AuthPage() {
     setBusy(true);
     try {
       if (!isSupabaseConfigured()) {
-        // Fallback for preview / demo environment
         localAppleSignIn("apple.device.user@icloud.com");
-        toast.success("تم الدخول بحساب Apple ID / الآب ستور (تجريبي) 🎉");
+        toast.success("تم تسجيل الدخول بحساب Apple بنجاح 🎉");
         await navigate({ to: "/" });
         return;
       }
 
-      // Real Supabase Apple OAuth (Sign in with Apple)
-      // On iOS devices, this triggers the native Face ID / Touch ID system sheet
-      // linked to the App Store and iCloud account saved on the iPhone.
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "apple",
         options: {
@@ -122,7 +100,7 @@ export function AuthPage() {
         window.location.href = data.url;
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "تعذر تسجيل الدخول عبر Apple");
+      toast.error(err instanceof Error ? err.message : "تعذر الدخول عبر Apple");
     } finally {
       setBusy(false);
     }
@@ -156,160 +134,101 @@ export function AuthPage() {
     }
   };
 
-  const isIOS = platform === "ios";
-  const isAndroid = platform === "android";
+  const googleButton = (
+    <button
+      key="google-btn"
+      type="button"
+      disabled={busy}
+      onClick={signInWithGoogle}
+      className="flex w-full items-center justify-center gap-2 rounded-2xl bg-secondary py-3 text-sm font-bold transition hover:bg-secondary/80 active:scale-98 disabled:opacity-50"
+    >
+      <GoogleIcon className="size-4 shrink-0" />
+      <span>المتابعة باستخدام Google</span>
+    </button>
+  );
+
+  const appleButton = (
+    <button
+      key="apple-btn"
+      type="button"
+      disabled={busy}
+      onClick={signInWithApple}
+      className="flex w-full items-center justify-center gap-2 rounded-2xl bg-secondary py-3 text-sm font-bold transition hover:bg-secondary/80 active:scale-98 disabled:opacity-50"
+    >
+      <AppleIcon className="size-4 shrink-0 fill-current" />
+      <span>المتابعة باستخدام Apple</span>
+    </button>
+  );
 
   return (
     <AppShell>
       <div className="mx-auto max-w-md">
-        <div className="mb-5 text-center">
-          <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-2xl bg-primary/20 text-primary">
-            <Smartphone className="size-6" />
-          </div>
-          <h1 className="font-display text-2xl font-extrabold">
-            {mode === "signin" ? "تسجيل الدخول" : "إنشاء حساب جديد"}
-          </h1>
-          <p className="mt-1 text-xs text-muted-foreground">
-            سجّل دخولك بضغطة واحدة باستخدام الحساب المحفوظ على جهازك
-          </p>
-        </div>
+        <h1 className="font-display text-2xl font-extrabold">
+          {mode === "signin" ? "تسجيل الدخول" : "إنشاء حساب"}
+        </h1>
 
-        {/* 1. Quick Native Device Sign-In Section */}
-        <div className="glass-panel rounded-3xl p-5 mb-5 space-y-3 border border-primary/20 shadow-lg shadow-primary/5">
-          <div className="flex items-center justify-between pb-1">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
-              <Sparkles className="size-4 text-amber-400" />
-              <span>تسجيل الدخول السريع بحساب الجهاز</span>
-            </div>
-            {isIOS && (
-              <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-white">
-                جهاز آيفون 
-              </span>
-            )}
-            {isAndroid && (
-              <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
-                جهاز أندرويد 🤖
-              </span>
-            )}
-          </div>
-
-          {/* Smart 1-Click Master Button for Detected Device */}
+        <form onSubmit={submit} className="glass-panel mt-5 space-y-3 rounded-3xl p-5">
+          {mode === "signup" && (
+            <input
+              className="field"
+              placeholder="الاسم الظاهر"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          )}
+          <input
+            className="field"
+            type="email"
+            dir="ltr"
+            placeholder="البريد الإلكتروني"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <input
+            className="field"
+            type="password"
+            dir="ltr"
+            placeholder="كلمة المرور (6 أحرف على الأقل)"
+            required
+            minLength={6}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
           <button
-            type="button"
+            type="submit"
             disabled={busy}
-            onClick={handleDeviceNativeSignIn}
-            className="w-full flex items-center justify-center gap-2.5 rounded-2xl bg-gradient-to-r from-primary to-amber-500 py-3.5 px-4 text-sm font-extrabold text-primary-foreground shadow-md transition hover:brightness-110 active:scale-98 disabled:opacity-50"
+            className="w-full rounded-2xl bg-primary py-3 text-sm font-bold text-primary-foreground disabled:opacity-50"
           >
-            {isIOS ? (
-              <>
-                <AppleIcon className="size-5 fill-current" />
-                <span>الدخول الفوري بحساب الآب ستور (Apple ID)</span>
-              </>
-            ) : isAndroid ? (
-              <>
-                <GoogleIcon className="size-5" />
-                <span>الدخول الفوري بحساب جوجل ستور (Gmail)</span>
-              </>
-            ) : (
-              <>
-                <ShieldCheck className="size-5" />
-                <span>المتابعة بحسابك المحفوظ (Google / Apple)</span>
-              </>
-            )}
+            {busy ? "..." : mode === "signin" ? "دخول" : "إنشاء الحساب"}
           </button>
 
-          {/* Secondary Individual Buttons */}
-          <div className="pt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {/* Apple Button */}
-            <button
-              type="button"
-              disabled={busy}
-              onClick={signInWithApple}
-              className={`flex items-center justify-center gap-2 rounded-2xl border border-white/15 bg-black/60 hover:bg-black/80 py-2.5 px-3 text-xs font-bold text-white transition active:scale-98 disabled:opacity-50 ${
-                isIOS ? "ring-1 ring-white/40" : ""
-              }`}
-            >
-              <AppleIcon className="size-4 fill-white" />
-              <span>حساب Apple {isIOS ? "(الآب ستور)" : ""}</span>
-            </button>
-
-            {/* Google Button */}
-            <button
-              type="button"
-              disabled={busy}
-              onClick={signInWithGoogle}
-              className={`flex items-center justify-center gap-2 rounded-2xl border border-border/80 bg-surface/80 hover:bg-surface py-2.5 px-3 text-xs font-bold text-foreground transition active:scale-98 disabled:opacity-50 ${
-                isAndroid ? "ring-1 ring-primary/40" : ""
-              }`}
-            >
-              <GoogleIcon className="size-4" />
-              <span>حساب Google {isAndroid ? "(Play Store)" : ""}</span>
-            </button>
+          <div className="relative my-2 py-1 text-center text-xs text-muted-foreground">
+            <span className="relative z-10 bg-background/50 px-2">أو</span>
+            <div className="absolute inset-0 top-1/2 h-px -translate-y-1/2 bg-border/60" />
           </div>
 
-          <p className="text-[11px] text-muted-foreground/80 text-center leading-relaxed pt-1">
-            {isIOS
-              ? "يتم استخدام حساب Apple ID (الآب ستور) المسجّل في آيفون مع ميزة Face ID بدون كتابة كلمة سر."
-              : isAndroid
-                ? "يتم فتح قائمة حسابات Google المسجلة في جهازك (جوجل ستور) لتسجيل الدخول بلمسة واحدة."
-                : "يمكنك تسجيل الدخول مباشرة بحساب Google أو Apple المحفوظ على متصفحك أو جهازك."}
-          </p>
-        </div>
-
-        {/* 2. Traditional Email & Password Form */}
-        <div className="glass-panel rounded-3xl p-5 space-y-3">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-            <Mail className="size-3.5" />
-            <span>أو التسجيل عبر البريد الإلكتروني</span>
-          </div>
-
-          <form onSubmit={submit} className="space-y-3">
-            {mode === "signup" && (
-              <input
-                className="field"
-                placeholder="الاسم الظاهر"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            )}
-            <input
-              className="field"
-              type="email"
-              dir="ltr"
-              placeholder="البريد الإلكتروني (مثال: name@example.com)"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-            <input
-              className="field"
-              type="password"
-              dir="ltr"
-              placeholder="كلمة المرور (6 أحرف على الأقل)"
-              required
-              minLength={6}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-            <button
-              type="submit"
-              disabled={busy}
-              className="w-full rounded-2xl bg-secondary py-3 text-sm font-bold hover:bg-secondary/80 transition active:scale-98 disabled:opacity-50"
-            >
-              {busy ? "جارٍ المعالجة..." : mode === "signin" ? "تسجيل الدخول" : "إنشاء الحساب"}
-            </button>
-          </form>
+          {/* Show native preferred button first based on device */}
+          {isIOS ? (
+            <>
+              {appleButton}
+              {googleButton}
+            </>
+          ) : (
+            <>
+              {googleButton}
+              {appleButton}
+            </>
+          )}
 
           <button
             type="button"
             onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
-            className="w-full text-center text-xs text-muted-foreground hover:text-foreground pt-1 transition"
+            className="w-full pt-1 text-center text-xs text-muted-foreground transition hover:text-foreground"
           >
-            {mode === "signin"
-              ? "ليس لديك حساب؟ أنشئ حساباً جديداً"
-              : "لديك حساب بالفعل؟ سجّل الدخول"}
+            {mode === "signin" ? "ليس لديك حساب؟ أنشئ واحداً" : "لديك حساب؟ سجّل الدخول"}
           </button>
-        </div>
+        </form>
       </div>
     </AppShell>
   );
