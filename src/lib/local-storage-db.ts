@@ -190,7 +190,7 @@ export function localSignUp(
   return { user, session };
 }
 
-export function localGoogleSignIn(email = "loaeloae95@gmail.com"): {
+export function localGoogleSignIn(email = "user@example.com"): {
   user: User;
   session: Session;
 } {

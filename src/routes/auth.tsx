@@ -3,7 +3,6 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -58,17 +57,22 @@ function AuthPage() {
   const google = async () => {
     setBusy(true);
     try {
-      const r = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: window.location.origin,
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/`,
+          queryParams: {
+            access_type: "offline",
+            prompt: "select_account",
+          },
+        },
       });
-      if (r.error) {
-        toast.error("تعذر الدخول عبر Google");
-      } else {
-        toast.success("تم تسجيل الدخول عبر Google بنجاح 🎉");
-        await navigate({ to: "/" });
+      if (error) throw error;
+      if (data?.url) {
+        window.location.href = data.url;
       }
-    } catch {
-      toast.error("تعذر الدخول عبر Google");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "تعذر الدخول عبر Google");
     } finally {
       setBusy(false);
     }

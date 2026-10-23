@@ -231,14 +231,27 @@ function createSupabaseClient() {
     import.meta.env["VITE_SUPABASE_URL"] ||
     process.env["SUPABASE_URL"] ||
     "https://placeholder-project.supabase.co";
-  const SUPABASE_PUBLISHABLE_KEY =
+
+  const SUPABASE_ANON_KEY =
+    import.meta.env["VITE_SUPABASE_ANON_KEY"] ||
     import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ||
+    process.env["SUPABASE_ANON_KEY"] ||
     process.env["SUPABASE_PUBLISHABLE_KEY"] ||
     "placeholder-key";
 
-  return createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  // Security safeguard: Never expose service_role key to the browser
+  if (
+    typeof SUPABASE_ANON_KEY === "string" &&
+    (SUPABASE_ANON_KEY.includes("service_role") || SUPABASE_ANON_KEY.includes("secret"))
+  ) {
+    console.error(
+      "SECURITY WARNING: You are attempting to use a Supabase Service Role (Secret) Key on the client side! Always use the public Anon Key (VITE_SUPABASE_ANON_KEY) instead.",
+    );
+  }
+
+  return createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: {
-      fetch: createSupabaseFetch(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY),
+      fetch: createSupabaseFetch(SUPABASE_URL, SUPABASE_ANON_KEY),
     },
     auth: {
       storage: brokeredPreviewStorage(),
