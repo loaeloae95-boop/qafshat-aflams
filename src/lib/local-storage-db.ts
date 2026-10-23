@@ -221,6 +221,37 @@ export function localGoogleSignIn(email = "user@example.com"): {
   return { user, session };
 }
 
+export function localAppleSignIn(email = "user@icloud.com"): {
+  user: User;
+  session: Session;
+} {
+  const normEmail = email.trim().toLowerCase();
+  const id = crypto.randomUUID();
+  const user: User = {
+    id,
+    app_metadata: { provider: "apple" },
+    user_metadata: {
+      display_name: normEmail.split("@")[0] || "مستخدم Apple ID",
+      avatar_url: `https://api.dicebear.com/7.x/identicon/svg?seed=${normEmail}`,
+    },
+    aud: "authenticated",
+    created_at: new Date().toISOString(),
+    email: normEmail,
+    role: "authenticated",
+  };
+
+  const session: Session = {
+    access_token: "local_at_apple_" + Math.random().toString(36).slice(2) + Date.now(),
+    token_type: "bearer",
+    expires_in: 3600 * 24 * 30,
+    refresh_token: "local_rt_apple_" + Math.random().toString(36).slice(2),
+    user,
+  };
+
+  saveLocalSession(session);
+  return { user, session };
+}
+
 // ---------- Local Clips Database Helpers ----------
 
 export interface LocalClipRow {
