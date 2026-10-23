@@ -19,5 +19,14 @@ export default defineConfig({
     },
     // FFmpeg WASM spawns its own worker; pre-bundling breaks the worker URL.
     optimizeDeps: { exclude: ["@ffmpeg/ffmpeg", "@ffmpeg/util"] },
+    build: {
+      rollupOptions: {
+        output: {
+          entryFileNames: "assets/[name]-[hash].js",
+          chunkFileNames: "assets/[name]-[hash].js",
+          assetFileNames: "assets/[name]-[hash].[ext]",
+        },
+      },
+    },
   },
 });

@@ -213,7 +213,7 @@ function ReelItem({ clip, active }: { clip: Clip; active: boolean }) {
       {/* 2. Blurred Video Ambient Reflection (Background Option) */}
       {bgMode === "blurred" && (
         <div className="pointer-events-none absolute inset-0 overflow-hidden z-0 select-none">
-          {clip.mediaType === "video" ? (
+          {clip.mediaType === "video" && clip.mediaUrl ? (
             <video
               ref={bgVideoRef}
               src={clip.mediaUrl}

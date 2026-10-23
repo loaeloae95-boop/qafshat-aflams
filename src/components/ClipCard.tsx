@@ -48,7 +48,7 @@ export function ClipCard({
           loading="lazy"
           className="absolute inset-0 h-full w-full object-cover"
         />
-      ) : clip.mediaType === "video" ? (
+      ) : clip.mediaType === "video" && clip.mediaUrl ? (
         <video
           src={`${clip.mediaUrl}#t=0.5`}
           preload="metadata"

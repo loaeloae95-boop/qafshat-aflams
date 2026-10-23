@@ -34,6 +34,8 @@ export function ClipVisual({
     }
   }, [autoPlay, active, mediaRef, onPlayingChange]);
 
+  const hasValidMedia = Boolean(clip?.mediaUrl && clip.mediaUrl.trim() !== "");
+
   const handlers = {
     onPlay: (e: React.SyntheticEvent<HTMLMediaElement>) => {
       if (current && current !== e.currentTarget) current.pause();
@@ -42,10 +44,20 @@ export function ClipVisual({
     },
     onPause: () => onPlayingChange?.(false),
     onEnded: () => onPlayingChange?.(false),
+    onError: () => {
+      onPlayingChange?.(false);
+    },
   };
   const objectFit = fit === "cover" ? "object-cover" : "object-contain";
 
   if (clip.mediaType === "video") {
+    if (!hasValidMedia) {
+      return (
+        <div className="absolute inset-0 grid place-items-center bg-black/60 text-muted-foreground text-xs">
+          <span>المقطع غير متاح</span>
+        </div>
+      );
+    }
     return (
       <video
         ref={(el) => {
@@ -71,15 +83,17 @@ export function ClipVisual({
           <Music className="size-8 opacity-70" />
         </div>
       )}
-      <audio
-        ref={(el) => {
-          mediaRef.current = el;
-        }}
-        src={clip.mediaUrl}
-        loop={loop}
-        preload="metadata"
-        {...handlers}
-      />
+      {hasValidMedia && (
+        <audio
+          ref={(el) => {
+            mediaRef.current = el;
+          }}
+          src={clip.mediaUrl}
+          loop={loop}
+          preload="metadata"
+          {...handlers}
+        />
+      )}
     </>
   );
 }

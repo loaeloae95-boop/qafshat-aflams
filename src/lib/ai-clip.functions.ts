@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { GoogleGenAI, Type } from "@google/genai";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 export type ClipSuggestion = {
   transcript: string;
@@ -12,7 +11,6 @@ export type ClipSuggestion = {
 };
 
 export const analyzeClip = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .inputValidator((i) => z.object({ audio: z.string().min(10).max(10_000_000) }).parse(i))
   .handler(async ({ data }): Promise<ClipSuggestion> => {
     const empty: ClipSuggestion = {
